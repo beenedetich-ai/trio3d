@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "trio3d",
-  "pages_build_output_dir": "out",
+  "assets": {
+    "directory": "./out"
+  },
   "compatibility_date": "2026-08-02",
   "compatibility_flags": [
     "nodejs_compat"
