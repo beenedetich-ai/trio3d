@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "trio3d",
   "assets": {
-    "directory": "./out"
+    "directory": ".next"
   },
   "compatibility_date": "2026-08-02",
   "compatibility_flags": [
