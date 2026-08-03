@@ -23,19 +23,37 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
   onAddToCart,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('Todas');
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
 
   const categoriesToRender = categoriesListNav && categoriesListNav.length > 0 ? categoriesListNav : CATEGORIES;
 
+  // Extract available subcategories for current main category
+  const availableSubcategories = React.useMemo(() => {
+    const categoryProducts =
+      selectedCategory === 'Todos'
+        ? productsList
+        : productsList.filter((p) => p.category === selectedCategory);
+
+    const subcats = categoryProducts
+      .map((p) => p.subcategory)
+      .filter((s): s is string => Boolean(s && s.trim()));
+
+    return Array.from(new Set(subcats));
+  }, [productsList, selectedCategory]);
+
   const filteredProducts = productsList.filter((product) => {
     const matchesCategory =
       selectedCategory === 'Todos' || product.category === selectedCategory;
+    const matchesSubcategory =
+      selectedSubcategory === 'Todas' || product.subcategory === selectedSubcategory;
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.subcategory && product.subcategory.toLowerCase().includes(searchTerm.toLowerCase())) ||
       product.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesSubcategory && matchesSearch;
   });
 
   const handleQuickWhatsApp = (e: React.MouseEvent, product: Product) => {
@@ -83,13 +101,16 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
         </motion.div>
 
         {/* Category Pills Slider */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-12 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
           {categoriesToRender.map((cat) => {
             const active = selectedCategory === cat;
             return (
               <button
                 key={cat}
-                onClick={() => onSelectCategory(cat)}
+                onClick={() => {
+                  onSelectCategory(cat);
+                  setSelectedSubcategory('Todas');
+                }}
                 className={`relative whitespace-nowrap px-6 py-2.5 rounded-full text-xs font-bold transition-all duration-300 ${
                   active ? 'text-white' : 'text-neutral-400 hover:text-white'
                 }`}
@@ -106,6 +127,48 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
             );
           })}
         </div>
+
+        {/* Subcategory Filter Bar */}
+        {availableSubcategories.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-12 scrollbar-none px-3 py-2.5 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-md">
+            <span className="text-[11px] font-bold text-pink-400 uppercase tracking-wider px-2 flex items-center gap-1.5 whitespace-nowrap">
+              <Sparkles className="w-3.5 h-3.5" />
+              Subcategorías:
+            </span>
+
+            <button
+              onClick={() => setSelectedSubcategory('Todas')}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                selectedSubcategory === 'Todas'
+                  ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 text-white shadow-md'
+                  : 'bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Todas ({selectedCategory === 'Todos' ? productsList.length : productsList.filter(p => p.category === selectedCategory).length})
+            </button>
+
+            {availableSubcategories.map((sub) => {
+              const active = selectedSubcategory === sub;
+              const count = productsList.filter(
+                (p) => (selectedCategory === 'Todos' || p.category === selectedCategory) && p.subcategory === sub
+              ).length;
+
+              return (
+                <button
+                  key={sub}
+                  onClick={() => setSelectedSubcategory(sub)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    active
+                      ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 text-white shadow-md'
+                      : 'bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {sub} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Products Grid */}
         <AnimatePresence mode="wait">

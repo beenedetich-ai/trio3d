@@ -52,6 +52,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Form states
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Product['category']>('Llaveros');
+  const [subcategory, setSubcategory] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState('/images/soportes.png');
@@ -104,6 +105,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setEditingId(null);
     setName('');
     setCategory('Llaveros');
+    setSubcategory('');
     setDescription('');
     setPrice('');
     setImage('/images/soportes.png');
@@ -121,6 +123,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setEditingId(product.id);
     setName(product.name);
     setCategory(product.category);
+    setSubcategory(product.subcategory || '');
     setDescription(product.description);
     setPrice(product.price);
     setImage(product.image);
@@ -160,6 +163,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const productPayload = {
       name,
       category,
+      subcategory: subcategory.trim() || undefined,
       description,
       price,
       image: image || '/images/soportes.png',
@@ -377,17 +381,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                       <div>
                         <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5">
-                          Precio *
+                          Subcategoría (Opcional)
                         </label>
                         <input
                           type="text"
-                          required
-                          placeholder="Ej: Desde $4.500"
-                          value={price}
-                          onChange={(e) => setPrice(e.target.value)}
+                          placeholder="Ej: Tipográficos, Gaming, Voronoi..."
+                          value={subcategory}
+                          onChange={(e) => setSubcategory(e.target.value)}
                           className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5">
+                        Precio *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: Desde $4.500"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                      />
                     </div>
 
                     <div>
@@ -690,9 +707,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/10 text-brand-400">
-                          {p.category}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/10 text-brand-400">
+                            {p.category}
+                          </span>
+                          {p.subcategory && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-500/15 text-pink-300 border border-pink-500/30">
+                              {p.subcategory}
+                            </span>
+                          )}
+                        </div>
                         <h4 className="text-sm font-bold text-white truncate mt-1">{p.name}</h4>
                         <p className="text-xs font-extrabold text-neutral-300">{p.price}</p>
                       </div>
