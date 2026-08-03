@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, ChangeEvent } from 'react';
-import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, RefreshCw, Star, Download, Copy, Lock } from 'lucide-react';
+import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, RefreshCw, Star, Download, Copy, Lock, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product, CATEGORIES } from '@/data/products';
 import { SubcategoryMap, DEFAULT_SUBCATEGORIES } from '@/hooks/useSubcategoryStore';
+import { uploadProductImage, isSupabaseConfigured } from '@/lib/supabase';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -16,10 +17,10 @@ interface AdminPanelModalProps {
   onEditProduct: (id: string, updatedData: Partial<Product>) => void;
   onDeleteProduct: (id: string) => void;
   onResetCatalog: () => void;
-  onAddCategory?: (categoryName: string) => boolean | void;
-  onRemoveCategory?: (categoryName: string) => boolean | void;
-  onAddSubcategory?: (categoryName: string, subcategoryName: string) => boolean | void;
-  onRemoveSubcategory?: (categoryName: string, subcategoryName: string) => boolean | void;
+  onAddCategory?: (categoryName: string) => Promise<boolean | void> | boolean | void;
+  onRemoveCategory?: (categoryName: string) => Promise<boolean | void> | boolean | void;
+  onAddSubcategory?: (categoryName: string, subcategoryName: string) => Promise<boolean | void> | boolean | void;
+  onRemoveSubcategory?: (categoryName: string, subcategoryName: string) => Promise<boolean | void> | boolean | void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -86,11 +87,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Active subcategories for selected form category
   const activeSubcategoriesForCategory = subcategoriesMap[category] || [];
 
-  const handleAddCategorySubmit = (e: React.FormEvent) => {
+  const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategoryInput.trim()) return;
     if (onAddCategory) {
-      const ok = onAddCategory(newCategoryInput.trim());
+      const ok = await onAddCategory(newCategoryInput.trim());
       if (ok !== false) {
         setCategory(newCategoryInput.trim() as any);
         setNewCategoryInput('');
@@ -99,11 +100,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  const handleAddSubcategorySubmit = (e: React.FormEvent) => {
+  const handleAddSubcategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubcategoryInput.trim() || !selectedSubCategoryParent) return;
     if (onAddSubcategory) {
-      const ok = onAddSubcategory(selectedSubCategoryParent, newSubcategoryInput.trim());
+      const ok = await onAddSubcategory(selectedSubCategoryParent, newSubcategoryInput.trim());
       if (ok !== false) {
         setSubcategory(newSubcategoryInput.trim());
         setNewSubcategoryInput('');
@@ -112,16 +113,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     }
   };
 
-  // Handle local image file upload -> Base64 Data URL
-  const handleImageFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Handle local image file upload -> Supabase Storage or Base64 Data URL
+  const handleImageFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsUploadingImage(true);
+
+    if (isSupabaseConfigured) {
+      const publicUrl = await uploadProductImage(file);
+      if (publicUrl) {
+        setImage(publicUrl);
+        setNotification('¡Imagen subida exitosamente a Supabase Storage!');
+        setIsUploadingImage(false);
+        return;
+      }
+    }
+
+    // Fallback if Supabase not configured or upload failed
     const reader = new FileReader();
     reader.onloadend = () => {
       if (typeof reader.result === 'string') {
         setImage(reader.result);
       }
+      setIsUploadingImage(false);
     };
     reader.readAsDataURL(file);
   };
@@ -586,9 +603,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           htmlFor="admin-image-upload"
                           className="cursor-pointer flex flex-col items-center justify-center gap-2 text-neutral-300 hover:text-white"
                         >
-                          <Upload className="w-8 h-8 text-brand-500" />
-                          <span className="text-xs font-bold">Subir foto desde tu computadora</span>
-                          <span className="text-[10px] text-neutral-500">PNG, JPG, WEBP de alta calidad</span>
+                          {isUploadingImage ? (
+                            <>
+                              <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+                              <span className="text-xs font-bold text-brand-400">Subiendo imagen a la nube...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-8 h-8 text-brand-500" />
+                              <span className="text-xs font-bold">Subir foto desde tu computadora</span>
+                              <span className="text-[10px] text-neutral-500">PNG, JPG, WEBP de alta calidad</span>
+                            </>
+                          )}
                         </label>
                       </div>
 

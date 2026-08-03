@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export type SubcategoryMap = Record<string, string[]>;
 
@@ -20,32 +21,71 @@ export function useSubcategoryStore() {
   const [subcategoriesMap, setSubcategoriesMap] = useState<SubcategoryMap>(DEFAULT_SUBCATEGORIES);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from localStorage on client mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(SUBCATEGORY_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === 'object') {
-          // Merge stored with defaults to ensure all categories exist
-          const merged: SubcategoryMap = { ...DEFAULT_SUBCATEGORIES };
-          Object.keys(parsed).forEach((cat) => {
-            if (Array.isArray(parsed[cat])) {
-              const unique = Array.from(new Set([...(merged[cat] || []), ...parsed[cat]]));
-              merged[cat] = unique;
+    let isMounted = true;
+
+    async function loadSubcategories() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('subcategories')
+            .select('category_name, name');
+
+          if (!error && data && data.length > 0) {
+            const mapFromDb: SubcategoryMap = { ...DEFAULT_SUBCATEGORIES };
+            data.forEach((row: { category_name: string; name: string }) => {
+              if (!mapFromDb[row.category_name]) {
+                mapFromDb[row.category_name] = [];
+              }
+              if (!mapFromDb[row.category_name].includes(row.name)) {
+                mapFromDb[row.category_name].push(row.name);
+              }
+            });
+
+            if (isMounted) {
+              setSubcategoriesMap(mapFromDb);
+              try {
+                localStorage.setItem(SUBCATEGORY_STORAGE_KEY, JSON.stringify(mapFromDb));
+              } catch (_) {}
+              setIsLoaded(true);
+              return;
             }
-          });
-          setSubcategoriesMap(merged);
+          }
+        } catch (err) {
+          console.error('Error fetching subcategories from Supabase:', err);
         }
       }
-    } catch (error) {
-      console.error('Error loading subcategories from localStorage:', error);
-    } finally {
-      setIsLoaded(true);
+
+      // Local storage fallback
+      try {
+        const stored = localStorage.getItem(SUBCATEGORY_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            const merged: SubcategoryMap = { ...DEFAULT_SUBCATEGORIES };
+            Object.keys(parsed).forEach((cat) => {
+              if (Array.isArray(parsed[cat])) {
+                const unique = Array.from(new Set([...(merged[cat] || []), ...parsed[cat]]));
+                merged[cat] = unique;
+              }
+            });
+            if (isMounted) setSubcategoriesMap(merged);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading subcategories from localStorage:', error);
+      } finally {
+        if (isMounted) setIsLoaded(true);
+      }
     }
+
+    loadSubcategories();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Save helper
   const saveSubcategoriesMap = (newMap: SubcategoryMap) => {
     setSubcategoriesMap(newMap);
     try {
@@ -55,8 +95,7 @@ export function useSubcategoryStore() {
     }
   };
 
-  // Add new subcategory to a category
-  const addSubcategory = (category: string, subcategoryName: string) => {
+  const addSubcategory = async (category: string, subcategoryName: string) => {
     const trimmed = subcategoryName.trim();
     if (!category || !trimmed) return false;
 
@@ -72,11 +111,23 @@ export function useSubcategoryStore() {
       [category]: updatedList,
     };
     saveSubcategoriesMap(updatedMap);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('subcategories').insert([
+          {
+            category_name: category,
+            name: trimmed,
+          },
+        ]);
+      } catch (err) {
+        console.error('Error adding subcategory to Supabase:', err);
+      }
+    }
     return true;
   };
 
-  // Remove subcategory from a category
-  const removeSubcategory = (category: string, subcategoryName: string) => {
+  const removeSubcategory = async (category: string, subcategoryName: string) => {
     if (!category || !subcategoryName) return false;
 
     const currentList = subcategoriesMap[category] || [];
@@ -86,10 +137,21 @@ export function useSubcategoryStore() {
       [category]: updatedList,
     };
     saveSubcategoriesMap(updatedMap);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('subcategories')
+          .delete()
+          .eq('category_name', category)
+          .eq('name', subcategoryName);
+      } catch (err) {
+        console.error('Error deleting subcategory from Supabase:', err);
+      }
+    }
     return true;
   };
 
-  // Get subcategories list for a specific category
   const getSubcategories = (category: string): string[] => {
     return subcategoriesMap[category] || [];
   };

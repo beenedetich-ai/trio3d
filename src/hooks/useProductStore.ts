@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { PRODUCTS, Product } from '@/data/products';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const STORAGE_KEY = 'trio3d_custom_products_v2';
 
@@ -9,36 +10,87 @@ export function useProductStore() {
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load & migrate from localStorage on client mount
+  // Load products from Supabase (with localStorage / default fallback)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const migrated = parsed.map((p: Product) => {
-            let finalPeso = typeof p.peso === 'number' && p.peso > 0 ? p.peso : 200;
-            if (finalPeso < 5) finalPeso = Math.round(finalPeso * 1000); // convert legacy kg to grams
-            return {
-              ...p,
-              peso: finalPeso,
-              alto: typeof p.alto === 'number' && p.alto > 0 ? p.alto : 10,
-              ancho: typeof p.ancho === 'number' && p.ancho > 0 ? p.ancho : 10,
-              largo: typeof p.largo === 'number' && p.largo > 0 ? p.largo : 10,
-            };
-          });
-          setProducts(migrated);
+    let isMounted = true;
+
+    async function loadProducts() {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!error && data && data.length > 0) {
+            const mapped: Product[] = data.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              subcategory: item.subcategory || '',
+              description: item.description || '',
+              price: item.price || '0',
+              isPopular: item.is_popular ?? false,
+              image: item.image || '/images/soportes.png',
+              materials: Array.isArray(item.materials) ? item.materials : ['PLA'],
+              dimensions: item.dimensions || '',
+              tags: Array.isArray(item.tags) ? item.tags : ['3D'],
+              peso: item.peso || 200,
+              alto: item.alto || 10,
+              ancho: item.ancho || 10,
+              largo: item.largo || 10,
+            }));
+
+            if (isMounted) {
+              setProducts(mapped);
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+              } catch (_) {}
+              setIsLoaded(true);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching products from Supabase:', error);
         }
       }
-    } catch (error) {
-      console.error('Error loading products from localStorage:', error);
-    } finally {
-      setIsLoaded(true);
+
+      // Fallback: LocalStorage or static catalog
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const migrated = parsed.map((p: Product) => {
+              let finalPeso = typeof p.peso === 'number' && p.peso > 0 ? p.peso : 200;
+              if (finalPeso < 5) finalPeso = Math.round(finalPeso * 1000);
+              return {
+                ...p,
+                peso: finalPeso,
+                alto: typeof p.alto === 'number' && p.alto > 0 ? p.alto : 10,
+                ancho: typeof p.ancho === 'number' && p.ancho > 0 ? p.ancho : 10,
+                largo: typeof p.largo === 'number' && p.largo > 0 ? p.largo : 10,
+              };
+            });
+            if (isMounted) setProducts(migrated);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading products from localStorage:', error);
+      } finally {
+        if (isMounted) setIsLoaded(true);
+      }
     }
+
+    loadProducts();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Save helper
-  const saveProducts = (newProducts: Product[]) => {
+  // Helper to sync local state & storage
+  const saveLocalState = (newProducts: Product[]) => {
     setProducts(newProducts);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newProducts));
@@ -48,30 +100,125 @@ export function useProductStore() {
   };
 
   // Add new product
-  const addProduct = (newProductData: Omit<Product, 'id'>) => {
+  const addProduct = async (newProductData: Omit<Product, 'id'>) => {
+    const id = `custom-${Date.now()}`;
     const newProduct: Product = {
       ...newProductData,
-      id: `custom-${Date.now()}`,
+      id,
     };
+
     const updated = [newProduct, ...products];
-    saveProducts(updated);
+    saveLocalState(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('products').insert([
+          {
+            id: newProduct.id,
+            name: newProduct.name,
+            category: newProduct.category,
+            subcategory: newProduct.subcategory || null,
+            description: newProduct.description,
+            price: newProduct.price,
+            is_popular: newProduct.isPopular ?? false,
+            image: newProduct.image,
+            materials: newProduct.materials,
+            dimensions: newProduct.dimensions || null,
+            tags: newProduct.tags,
+            peso: newProduct.peso || 200,
+            alto: newProduct.alto || 10,
+            ancho: newProduct.ancho || 10,
+            largo: newProduct.largo || 10,
+          },
+        ]);
+        if (error) {
+          console.error('Error inserting product into Supabase:', error);
+        }
+      } catch (err) {
+        console.error('Exception inserting product into Supabase:', err);
+      }
+    }
   };
 
   // Edit existing product
-  const editProduct = (id: string, updatedData: Partial<Product>) => {
+  const editProduct = async (id: string, updatedData: Partial<Product>) => {
     const updated = products.map((p) => (p.id === id ? { ...p, ...updatedData } : p));
-    saveProducts(updated);
+    saveLocalState(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const dbPayload: any = {};
+        if (updatedData.name !== undefined) dbPayload.name = updatedData.name;
+        if (updatedData.category !== undefined) dbPayload.category = updatedData.category;
+        if (updatedData.subcategory !== undefined) dbPayload.subcategory = updatedData.subcategory;
+        if (updatedData.description !== undefined) dbPayload.description = updatedData.description;
+        if (updatedData.price !== undefined) dbPayload.price = updatedData.price;
+        if (updatedData.isPopular !== undefined) dbPayload.is_popular = updatedData.isPopular;
+        if (updatedData.image !== undefined) dbPayload.image = updatedData.image;
+        if (updatedData.materials !== undefined) dbPayload.materials = updatedData.materials;
+        if (updatedData.dimensions !== undefined) dbPayload.dimensions = updatedData.dimensions;
+        if (updatedData.tags !== undefined) dbPayload.tags = updatedData.tags;
+        if (updatedData.peso !== undefined) dbPayload.peso = updatedData.peso;
+        if (updatedData.alto !== undefined) dbPayload.alto = updatedData.alto;
+        if (updatedData.ancho !== undefined) dbPayload.ancho = updatedData.ancho;
+        if (updatedData.largo !== undefined) dbPayload.largo = updatedData.largo;
+
+        const { error } = await supabase.from('products').update(dbPayload).eq('id', id);
+        if (error) {
+          console.error('Error updating product in Supabase:', error);
+        }
+      } catch (err) {
+        console.error('Exception updating product in Supabase:', err);
+      }
+    }
   };
 
   // Delete product
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     const updated = products.filter((p) => p.id !== id);
-    saveProducts(updated);
+    saveLocalState(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) {
+          console.error('Error deleting product from Supabase:', error);
+        }
+      } catch (err) {
+        console.error('Exception deleting product from Supabase:', err);
+      }
+    }
   };
 
-  // Reset to original catalog
-  const resetToDefault = () => {
-    saveProducts(PRODUCTS);
+  // Reset catalog
+  const resetToDefault = async () => {
+    saveLocalState(PRODUCTS);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('products').delete().neq('id', '___none___');
+        const dbRows = PRODUCTS.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          subcategory: p.subcategory || null,
+          description: p.description,
+          price: p.price,
+          is_popular: p.isPopular ?? false,
+          image: p.image,
+          materials: p.materials,
+          dimensions: p.dimensions || null,
+          tags: p.tags,
+          peso: p.peso || 200,
+          alto: p.alto || 10,
+          ancho: p.ancho || 10,
+          largo: p.largo || 10,
+        }));
+        await supabase.from('products').upsert(dbRows);
+      } catch (err) {
+        console.error('Exception resetting products in Supabase:', err);
+      }
+    }
   };
 
   return {
