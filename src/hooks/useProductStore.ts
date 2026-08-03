@@ -10,7 +10,7 @@ export function useProductStore() {
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load products from Supabase (with localStorage / default fallback)
+  // Load products from Supabase (with initial seed if empty, or local fallback)
   useEffect(() => {
     let isMounted = true;
 
@@ -22,32 +22,63 @@ export function useProductStore() {
             .select('*')
             .order('created_at', { ascending: false });
 
-          if (!error && data && data.length > 0) {
-            const mapped: Product[] = data.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              category: item.category,
-              subcategory: item.subcategory || '',
-              description: item.description || '',
-              price: item.price || '0',
-              isPopular: item.is_popular ?? false,
-              image: item.image || '/images/soportes.png',
-              materials: Array.isArray(item.materials) ? item.materials : ['PLA'],
-              dimensions: item.dimensions || '',
-              tags: Array.isArray(item.tags) ? item.tags : ['3D'],
-              peso: item.peso || 200,
-              alto: item.alto || 10,
-              ancho: item.ancho || 10,
-              largo: item.largo || 10,
-            }));
+          if (!error && data) {
+            if (data.length === 0) {
+              // If Supabase table is empty on first load, seed initial PRODUCTS into DB
+              const dbRows = PRODUCTS.map((p) => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                subcategory: p.subcategory || null,
+                description: p.description,
+                price: p.price,
+                is_popular: p.isPopular ?? false,
+                image: p.image,
+                materials: p.materials,
+                dimensions: p.dimensions || null,
+                tags: p.tags,
+                peso: p.peso || 200,
+                alto: p.alto || 10,
+                ancho: p.ancho || 10,
+                largo: p.largo || 10,
+              }));
 
-            if (isMounted) {
-              setProducts(mapped);
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
-              } catch (_) {}
-              setIsLoaded(true);
-              return;
+              const { error: seedError } = await supabase.from('products').insert(dbRows);
+              if (!seedError && isMounted) {
+                setProducts(PRODUCTS);
+                try {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(PRODUCTS));
+                } catch (_) {}
+                setIsLoaded(true);
+                return;
+              }
+            } else {
+              const mapped: Product[] = data.map((item: any) => ({
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                subcategory: item.subcategory || '',
+                description: item.description || '',
+                price: item.price || '0',
+                isPopular: item.is_popular ?? false,
+                image: item.image || '/images/soportes.png',
+                materials: Array.isArray(item.materials) ? item.materials : ['PLA'],
+                dimensions: item.dimensions || '',
+                tags: Array.isArray(item.tags) ? item.tags : ['3D'],
+                peso: item.peso || 200,
+                alto: item.alto || 10,
+                ancho: item.ancho || 10,
+                largo: item.largo || 10,
+              }));
+
+              if (isMounted) {
+                setProducts(mapped);
+                try {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+                } catch (_) {}
+                setIsLoaded(true);
+                return;
+              }
             }
           }
         } catch (error) {
@@ -55,7 +86,7 @@ export function useProductStore() {
         }
       }
 
-      // Fallback: LocalStorage or static catalog
+      // Fallback if Supabase is offline or not configured: LocalStorage or static catalog
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
