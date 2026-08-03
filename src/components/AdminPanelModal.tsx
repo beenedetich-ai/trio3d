@@ -260,8 +260,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <h3 className="text-xl font-extrabold text-white flex items-center gap-2">
                   Panel de Administración <span className="text-xs font-mono font-normal text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/30">Trío 3D</span>
                 </h3>
-                <p className="text-xs text-neutral-400">
-                  {isAuthenticated ? 'Agregá, editá o gestioná productos fácilmente.' : 'Acceso restringido únicamente para administradores.'}
+                <p className="text-xs text-neutral-400 flex items-center gap-2 mt-0.5">
+                  {isSupabaseConfigured ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      ☁️ Sincronización en la Nube Activa (Supabase)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      ⚠️ Modo Local (Faltan variables en Cloudflare Pages)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
