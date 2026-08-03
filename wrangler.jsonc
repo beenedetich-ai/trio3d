@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "trio3d",
+  "name": "trio-3d",
   "assets": {
     "directory": ".next"
   },
