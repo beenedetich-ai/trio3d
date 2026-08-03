@@ -30,8 +30,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onAddCategory,
   onRemoveCategory,
 }) => {
+  const ADMIN_PASSWORD = '212939@';
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [inputPassword, setInputPassword] = useState<string>('');
+  const [authError, setAuthError] = useState<boolean>(false);
+
   const [activeTab, setActiveTab] = useState<'create' | 'list' | 'export'>('create');
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputPassword === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setAuthError(false);
+      setInputPassword('');
+    } else {
+      setAuthError(true);
+    }
+  };
 
   // Form states
   const [name, setName] = useState('');
@@ -196,19 +212,79 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
               <div>
                 <h3 className="text-xl font-extrabold text-white flex items-center gap-2">
-                  Panel de Administración <span className="text-xs font-mono font-normal text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/30">Sin Código</span>
+                  Panel de Administración <span className="text-xs font-mono font-normal text-brand-400 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/30">Trío 3D</span>
                 </h3>
-                <p className="text-xs text-neutral-400">Agregá, editá o gestioná productos fácilmente.</p>
+                <p className="text-xs text-neutral-400">
+                  {isAuthenticated ? 'Agregá, editá o gestioná productos fácilmente.' : 'Acceso restringido únicamente para administradores.'}
+                </p>
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {isAuthenticated && (
+                <button
+                  onClick={() => setIsAuthenticated(false)}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white text-xs font-bold transition-colors border border-white/10"
+                >
+                  🔒 Cerrar Sesión
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
+
+          {!isAuthenticated ? (
+            /* Password Authentication Screen */
+            <div className="p-8 sm:p-12 text-center flex flex-col items-center justify-center space-y-6">
+              <div className="p-5 rounded-3xl bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-amber-500/20 text-pink-400 border border-pink-500/30 shadow-2xl animate-pulse">
+                <Lock className="w-10 h-10" />
+              </div>
+
+              <div>
+                <h3 className="text-2xl font-black text-white">Acceso Administrador Trío 3D</h3>
+                <p className="text-sm text-neutral-400 font-light mt-1">
+                  Ingresá tu contraseña de seguridad para gestionar el catálogo
+                </p>
+              </div>
+
+              <form onSubmit={handlePasswordSubmit} className="w-full max-w-sm space-y-4">
+                <div>
+                  <input
+                    type="password"
+                    required
+                    autoFocus
+                    placeholder="Escribí la contraseña aquí..."
+                    value={inputPassword}
+                    onChange={(e) => {
+                      setInputPassword(e.target.value);
+                      if (authError) setAuthError(false);
+                    }}
+                    className={`w-full bg-white/[0.05] border ${
+                      authError ? 'border-rose-500 focus:ring-rose-500' : 'border-white/20 focus:border-pink-500'
+                    } rounded-2xl px-5 py-3.5 text-base text-white text-center tracking-widest placeholder-neutral-500 focus:outline-none transition-all shadow-inner`}
+                  />
+                  {authError && (
+                    <p className="text-xs font-bold text-rose-400 mt-2">
+                      ⚠️ Contraseña incorrecta. Verificá los caracteres e intentá de nuevo.
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 hover:opacity-95 text-white font-extrabold text-sm shadow-xl shadow-pink-500/25 border border-white/20 transition-all cursor-pointer"
+                >
+                  Ingresar al Panel
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
 
           {/* Navigation Tabs */}
           <div className="flex border-b border-white/10 bg-neutral-900/30 px-6 gap-2 pt-3">
@@ -671,6 +747,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               </div>
             )}
           </div>
+          </>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>
