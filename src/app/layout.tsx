@@ -29,17 +29,33 @@ export const metadata: Metadata = {
   authors: [{ name: 'Trío 3D' }],
   creator: 'Trío 3D',
   publisher: 'Trío 3D',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-182x182.png', sizes: '182x182', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
   openGraph: {
     title: 'Trío 3D | Convertimos tus ideas en realidad',
-    description: 'Impresiones 3D personalizadas de alta calidad. Presupuestos al instante por WhatsApp.',
+    description: 'Impresiones 3D personalizadas de alta calidad: llaveros, decoración, soportes gamer, macetas y proyectos a medida. Presupuestos al instante.',
     url: 'https://trio3d.com',
     siteName: 'Trío 3D Studio',
     images: [
       {
-        url: '/images/hero.png',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Trío 3D Studio - Impresión 3D',
+        alt: 'Trío 3D Studio - Impresión 3D Personalizada',
+      },
+      {
+        url: '/images/logo.png',
+        width: 500,
+        height: 500,
+        alt: 'Trío 3D Logo',
       },
     ],
     locale: 'es_AR',
@@ -49,7 +65,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Trío 3D | Convertimos tus ideas en realidad',
     description: 'Impresiones 3D personalizadas de alta calidad.',
-    images: ['/images/hero.png'],
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,
@@ -69,7 +85,8 @@ export default function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: 'Trío 3D',
-    image: 'https://trio3d.com/images/hero.png',
+    image: 'https://trio3d.com/og-image.png',
+    logo: 'https://trio3d.com/images/logo.png',
     description: 'Impresiones 3D personalizadas de alta calidad.',
     priceRange: '$$',
     address: {
@@ -90,6 +107,9 @@ export default function RootLayout({
         />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="182x182" href="/favicon-182x182.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       </head>
       <body className="bg-dark-bg text-neutral-100 antialiased selection:bg-brand-500 selection:text-white font-sans">
         {children}
