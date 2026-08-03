@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const orderId = searchParams.get('orderId') || 'EP-PARANA-100201';
-  const cp = searchParams.get('cp') || '3100';
-  const name = searchParams.get('name') || 'Cliente Trío 3D';
-  const service = searchParams.get('service') || 'Andreani / Envíopack';
+  let orderId = 'EP-PARANA-100201';
+  let cp = '3100';
+  let name = 'Cliente Trío 3D';
+  let service = 'Andreani / Envíopack';
+  try {
+    if (request && request.url) {
+      const { searchParams } = new URL(request.url);
+      orderId = searchParams.get('orderId') || orderId;
+      cp = searchParams.get('cp') || cp;
+      name = searchParams.get('name') || name;
+      service = searchParams.get('service') || service;
+    }
+  } catch (e) {}
 
   // Printable HTML Label / Oblea template
   const labelHtml = `<!DOCTYPE html>
