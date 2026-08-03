@@ -108,62 +108,58 @@ export const Hero: React.FC = () => {
           </motion.a>
         </motion.div>
 
-        {/* Feature Badges Grid */}
+        {/* Top Direct Navigation Badges: Catálogo Interactivo & Galería de Impresiones */}
         <motion.div
           variants={itemVariants}
-          className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 w-full max-w-5xl"
+          className="mt-16 grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-3xl"
         >
-          <motion.div
+          <motion.a
+            href="#categorias"
             whileHover={{ y: -6, scale: 1.02 }}
-            className="apple-card p-5 rounded-3xl flex items-center gap-4 text-left"
+            whileTap={{ scale: 0.98 }}
+            className="apple-card p-6 rounded-3xl flex items-center gap-5 text-left border border-purple-500/30 hover:border-pink-500/50 bg-gradient-to-r from-purple-900/20 via-pink-900/10 to-transparent group cursor-pointer shadow-2xl transition-all"
           >
-            <div className="p-3 rounded-2xl bg-brand-500/15 text-brand-500 border border-brand-500/30">
-              <Zap className="w-6 h-6" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg shadow-pink-500/20 group-hover:scale-110 transition-transform">
+              <Layers className="w-7 h-7" />
             </div>
-            <div>
-              <p className="text-xs text-neutral-400 font-medium">Cotización</p>
-              <p className="text-sm sm:text-base font-bold text-white">Rápida & Directa</p>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-pink-400">Exploración 3D</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-pink-500 animate-ping" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-pink-300 transition-colors">
+                Catálogo Interactivo
+              </h3>
+              <p className="text-xs sm:text-sm text-neutral-400 font-light mt-0.5">
+                Filtrá por categorías y encontrá tu producto ideal
+              </p>
             </div>
-          </motion.div>
+            <ArrowRight className="w-5 h-5 text-pink-400 group-hover:translate-x-1 transition-transform" />
+          </motion.a>
 
-          <motion.div
+          <motion.a
+            href="#galeria"
             whileHover={{ y: -6, scale: 1.02 }}
-            className="apple-card p-5 rounded-3xl flex items-center gap-4 text-left"
+            whileTap={{ scale: 0.98 }}
+            className="apple-card p-6 rounded-3xl flex items-center gap-5 text-left border border-amber-500/30 hover:border-amber-400/50 bg-gradient-to-r from-amber-900/20 via-purple-900/10 to-transparent group cursor-pointer shadow-2xl transition-all"
           >
-            <div className="p-3 rounded-2xl bg-brand-500/15 text-brand-500 border border-brand-500/30">
-              <Layers className="w-6 h-6" />
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-pink-500 text-white shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
+              <Sparkles className="w-7 h-7" />
             </div>
-            <div>
-              <p className="text-xs text-neutral-400 font-medium">Materiales</p>
-              <p className="text-sm sm:text-base font-bold text-white">PLA & PETG Premium</p>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">Modelos Reales</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-amber-300 transition-colors">
+                Galería de Impresiones
+              </h3>
+              <p className="text-xs sm:text-sm text-neutral-400 font-light mt-0.5">
+                Mirá los modelos terminados y alta definición
+              </p>
             </div>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -6, scale: 1.02 }}
-            className="apple-card p-5 rounded-3xl flex items-center gap-4 text-left"
-          >
-            <div className="p-3 rounded-2xl bg-brand-500/15 text-brand-500 border border-brand-500/30">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-400 font-medium">Garantía</p>
-              <p className="text-sm sm:text-base font-bold text-white">Alta Precisión</p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -6, scale: 1.02 }}
-            className="apple-card p-5 rounded-3xl flex items-center gap-4 text-left"
-          >
-            <div className="p-3 rounded-2xl bg-brand-500/15 text-brand-500 border border-brand-500/30">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-400 font-medium">Envíos</p>
-              <p className="text-sm sm:text-base font-bold text-white">A todo el país</p>
-            </div>
-          </motion.div>
+            <ArrowRight className="w-5 h-5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+          </motion.a>
         </motion.div>
       </motion.div>
     </section>

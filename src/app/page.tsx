@@ -7,6 +7,7 @@ import { Categories } from '@/components/Categories';
 import { ProductGallery } from '@/components/ProductGallery';
 import { HowToBuy } from '@/components/HowToBuy';
 import { CraftsmanshipSection } from '@/components/CraftsmanshipSection';
+import { FeaturesBar } from '@/components/FeaturesBar';
 import { FaqSection } from '@/components/FaqSection';
 import { Footer } from '@/components/Footer';
 import { WhatsAppFloat } from '@/components/WhatsAppFloat';
@@ -75,7 +76,10 @@ export default function Home() {
       {/* 4. Fabricación Especial On-Demand & Exclusividad */}
       <CraftsmanshipSection />
 
-      {/* 5. Explicación de cómo comprar en 4 pasos */}
+      {/* 5. Barra de Beneficios (Cotización, Materiales, Garantía, Envíos) */}
+      <FeaturesBar />
+
+      {/* 6. Explicación de cómo comprar en 4 pasos */}
       <HowToBuy />
 
       {/* 6. Preguntas Frecuentes */}
