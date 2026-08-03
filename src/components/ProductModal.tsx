@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { X, Check, ShoppingBag, MessageCircle, Maximize2, Layers, Clock, Scale } from 'lucide-react';
 import { Product } from '@/data/products';
+import { formatPrice } from '@/utils/formatPrice';
 
 interface ProductModalProps {
   product: Product | null;
@@ -62,7 +63,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
           
           <div className="absolute bottom-4 left-4 z-10">
             <span className="px-3 py-1 rounded-full bg-brand-500/90 text-white text-xs font-bold shadow-md">
-              {product.price}
+              {formatPrice(product.price)}
             </span>
           </div>
         </div>

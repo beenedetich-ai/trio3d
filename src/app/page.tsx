@@ -25,6 +25,7 @@ export default function Home() {
 
   const {
     products,
+    isLoaded,
     addProduct,
     editProduct,
     deleteProduct,
@@ -73,6 +74,7 @@ export default function Home() {
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
         productsList={products}
+        isLoaded={isLoaded}
         categoriesListNav={categories}
         onAddToCart={(p) => {
           addToCart(p);

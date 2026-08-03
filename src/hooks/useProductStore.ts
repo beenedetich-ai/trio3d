@@ -8,7 +8,7 @@ const STORAGE_KEY = 'trio3d_custom_products_v2';
 const HAS_SEEDED_KEY = 'trio3d_has_seeded_v2';
 
 export function useProductStore() {
-  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load products from Supabase (with one-time initial seed, or local fallback)

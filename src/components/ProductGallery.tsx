@@ -4,22 +4,25 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { Search, MessageCircle, Sparkles, Eye, Star, ShoppingBag, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PRODUCTS, CATEGORIES, Product } from '@/data/products';
+import { CATEGORIES, Product } from '@/data/products';
 import { ProductModal } from './ProductModal';
+import { formatPrice } from '@/utils/formatPrice';
 
 interface ProductGalleryProps {
   selectedCategory: string;
   onSelectCategory: (category: string) => void;
   productsList?: Product[];
   categoriesListNav?: string[];
+  isLoaded?: boolean;
   onAddToCart?: (product: Product) => void;
 }
 
 export const ProductGallery: React.FC<ProductGalleryProps> = ({
   selectedCategory,
   onSelectCategory,
-  productsList = PRODUCTS,
+  productsList = [],
   categoriesListNav = CATEGORIES as unknown as string[],
+  isLoaded = true,
   onAddToCart,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +62,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
   const handleQuickWhatsApp = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
     const message = encodeURIComponent(
-      `¡Hola Trío 3D! Quisiera consultar precio y disponibilidad del producto: *${product.name}* (${product.category}).`
+      `¡Hola Trío 3D! Quisiera consultar disponibilidad y encargar el producto: *${product.name}* (${product.category}).`
     );
     window.open(`https://wa.me/5493434381991?text=${message}`, '_blank');
   };
@@ -172,7 +175,16 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
         {/* Products Grid */}
         <AnimatePresence mode="wait">
-          {filteredProducts.length === 0 ? (
+          {!isLoaded ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="apple-card rounded-3xl overflow-hidden h-80 animate-pulse bg-white/[0.03] border border-white/10"
+                />
+              ))}
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -187,7 +199,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
               <button
                 onClick={() => {
                   const message = encodeURIComponent('¡Hola Trío 3D! No encontré un modelo específico en la web. ¿Pueden hacerlo a medida?');
-                  window.open(`https://wa.me/5491123456789?text=${message}`, '_blank');
+                  window.open(`https://wa.me/5493434381991?text=${message}`, '_blank');
                 }}
                 className="mt-6 inline-flex items-center gap-2 bg-gradient-to-r from-brand-500 to-orange-600 text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-brand-500/30"
               >
@@ -260,11 +272,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                     {/* Price & Action */}
                     <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-semibold">
-                          Precio aprox
-                        </span>
                         <span className="text-base font-extrabold text-amber-400 block">
-                          {product.price}
+                          {formatPrice(product.price)}
                         </span>
                         <span className="text-[10px] text-amber-300/90 font-medium flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3 text-amber-400" />
@@ -315,4 +324,3 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
     </section>
   );
 };
-
