@@ -42,6 +42,10 @@ ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subcategories ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir todo en productos" ON public.products;
+DROP POLICY IF EXISTS "Permitir todo en categorías" ON public.categories;
+DROP POLICY IF EXISTS "Permitir todo en subcategorías" ON public.subcategories;
+
 CREATE POLICY "Permitir todo en productos" ON public.products FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo en categorías" ON public.categories FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo en subcategorías" ON public.subcategories FOR ALL USING (true) WITH CHECK (true);
@@ -50,6 +54,8 @@ CREATE POLICY "Permitir todo en subcategorías" ON public.subcategories FOR ALL 
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('product-images', 'product-images', true)
 ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Permitir subida y lectura pública de imágenes" ON storage.objects;
 
 CREATE POLICY "Permitir subida y lectura pública de imágenes" ON storage.objects
 FOR ALL USING (bucket_id = 'product-images') WITH CHECK (bucket_id = 'product-images');
