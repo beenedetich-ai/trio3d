@@ -5,12 +5,13 @@ import { PRODUCTS, Product } from '@/data/products';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const STORAGE_KEY = 'trio3d_custom_products_v2';
+const HAS_SEEDED_KEY = 'trio3d_has_seeded_v2';
 
 export function useProductStore() {
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load products from Supabase (with initial seed if empty, or local fallback)
+  // Load products from Supabase (with one-time initial seed, or local fallback)
   useEffect(() => {
     let isMounted = true;
 
@@ -23,8 +24,10 @@ export function useProductStore() {
             .order('created_at', { ascending: false });
 
           if (!error && data) {
-            if (data.length === 0) {
-              // If Supabase table is empty on first load, seed initial PRODUCTS into DB
+            const hasSeededBefore = localStorage.getItem(HAS_SEEDED_KEY) === 'true';
+
+            // Only seed on the VERY FIRST initialization if database is empty and never seeded
+            if (data.length === 0 && !hasSeededBefore) {
               const dbRows = PRODUCTS.map((p) => ({
                 id: p.id,
                 name: p.name,
@@ -44,6 +47,8 @@ export function useProductStore() {
               }));
 
               const { error: seedError } = await supabase.from('products').insert(dbRows);
+              localStorage.setItem(HAS_SEEDED_KEY, 'true');
+
               if (!seedError && isMounted) {
                 setProducts(PRODUCTS);
                 try {
@@ -53,6 +58,7 @@ export function useProductStore() {
                 return;
               }
             } else {
+              // Map DB rows directly (even if data is empty [] after user deleted everything)
               const mapped: Product[] = data.map((item: any) => ({
                 id: item.id,
                 name: item.name,
@@ -73,6 +79,7 @@ export function useProductStore() {
 
               if (isMounted) {
                 setProducts(mapped);
+                localStorage.setItem(HAS_SEEDED_KEY, 'true');
                 try {
                   localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
                 } catch (_) {}
@@ -91,7 +98,7 @@ export function useProductStore() {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             const migrated = parsed.map((p: Product) => {
               let finalPeso = typeof p.peso === 'number' && p.peso > 0 ? p.peso : 200;
               if (finalPeso < 5) finalPeso = Math.round(finalPeso * 1000);
@@ -124,6 +131,7 @@ export function useProductStore() {
   const saveLocalState = (newProducts: Product[]) => {
     setProducts(newProducts);
     try {
+      localStorage.setItem(HAS_SEEDED_KEY, 'true');
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newProducts));
     } catch (error) {
       console.error('Error saving products to localStorage:', error);
