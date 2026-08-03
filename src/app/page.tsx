@@ -16,6 +16,7 @@ import { CartDrawer } from '@/components/CartDrawer';
 import { useProductStore } from '@/hooks/useProductStore';
 import { useCartStore } from '@/hooks/useCartStore';
 import { useCategoryStore } from '@/hooks/useCategoryStore';
+import { useSubcategoryStore } from '@/hooks/useSubcategoryStore';
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -35,6 +36,12 @@ export default function Home() {
     addCategory,
     removeCategory,
   } = useCategoryStore();
+
+  const {
+    subcategoriesMap,
+    addSubcategory,
+    removeSubcategory,
+  } = useSubcategoryStore();
 
   const {
     cart,
@@ -109,12 +116,15 @@ export default function Home() {
         onClose={() => setIsAdminOpen(false)}
         products={products}
         categories={categories}
+        subcategoriesMap={subcategoriesMap}
         onAddProduct={addProduct}
         onEditProduct={editProduct}
         onDeleteProduct={deleteProduct}
         onResetCatalog={resetToDefault}
         onAddCategory={addCategory}
         onRemoveCategory={removeCategory}
+        onAddSubcategory={addSubcategory}
+        onRemoveSubcategory={removeSubcategory}
       />
     </main>
   );

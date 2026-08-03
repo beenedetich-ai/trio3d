@@ -4,18 +4,22 @@ import React, { useState, ChangeEvent } from 'react';
 import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, RefreshCw, Star, Download, Copy, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product, CATEGORIES } from '@/data/products';
+import { SubcategoryMap, DEFAULT_SUBCATEGORIES } from '@/hooks/useSubcategoryStore';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
   categories?: string[];
+  subcategoriesMap?: SubcategoryMap;
   onAddProduct: (productData: Omit<Product, 'id'>) => void;
   onEditProduct: (id: string, updatedData: Partial<Product>) => void;
   onDeleteProduct: (id: string) => void;
   onResetCatalog: () => void;
   onAddCategory?: (categoryName: string) => boolean | void;
   onRemoveCategory?: (categoryName: string) => boolean | void;
+  onAddSubcategory?: (categoryName: string, subcategoryName: string) => boolean | void;
+  onRemoveSubcategory?: (categoryName: string, subcategoryName: string) => boolean | void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -23,12 +27,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onClose,
   products,
   categories = CATEGORIES as unknown as string[],
+  subcategoriesMap = DEFAULT_SUBCATEGORIES,
   onAddProduct,
   onEditProduct,
   onDeleteProduct,
   onResetCatalog,
   onAddCategory,
   onRemoveCategory,
+  onAddSubcategory,
+  onRemoveSubcategory,
 }) => {
   const ADMIN_PASSWORD = '212939@';
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -70,9 +77,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [notification, setNotification] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [newSubcategoryInput, setNewSubcategoryInput] = useState('');
+  const [selectedSubCategoryParent, setSelectedSubCategoryParent] = useState<string>('Figuras');
 
   // Available categories (excluding 'Todos')
   const formCategories = categories.filter((c) => c !== 'Todos');
+
+  // Active subcategories for selected form category
+  const activeSubcategoriesForCategory = subcategoriesMap[category] || [];
 
   const handleAddCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +95,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         setCategory(newCategoryInput.trim() as any);
         setNewCategoryInput('');
         setNotification(`¡Categoría "${newCategoryInput.trim()}" agregada con éxito!`);
+      }
+    }
+  };
+
+  const handleAddSubcategorySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubcategoryInput.trim() || !selectedSubCategoryParent) return;
+    if (onAddSubcategory) {
+      const ok = onAddSubcategory(selectedSubCategoryParent, newSubcategoryInput.trim());
+      if (ok !== false) {
+        setSubcategory(newSubcategoryInput.trim());
+        setNewSubcategoryInput('');
+        setNotification(`¡Subcategoría "${newSubcategoryInput.trim()}" agregada a ${selectedSubCategoryParent}!`);
       }
     }
   };
@@ -381,15 +406,37 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                       <div>
                         <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5">
-                          Subcategoría (Opcional)
+                          Subcategoría (Seleccionar o crear)
                         </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: Tipográficos, Gaming, Voronoi..."
-                          value={subcategory}
-                          onChange={(e) => setSubcategory(e.target.value)}
-                          className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
-                        />
+                        <div className="space-y-2">
+                          <select
+                            value={activeSubcategoriesForCategory.includes(subcategory) ? subcategory : subcategory ? 'custom' : ''}
+                            onChange={(e) => {
+                              if (e.target.value !== 'custom') {
+                                setSubcategory(e.target.value);
+                              }
+                            }}
+                            className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                          >
+                            <option value="">-- Seleccionar Subcategoría --</option>
+                            {activeSubcategoriesForCategory.map((sub) => (
+                              <option key={sub} value={sub}>
+                                {sub}
+                              </option>
+                            ))}
+                            <option value="custom">✏️ Escribir nueva subcategoría...</option>
+                          </select>
+
+                          {(!activeSubcategoriesForCategory.includes(subcategory) || subcategory === '') && (
+                            <input
+                              type="text"
+                              placeholder="O escribí una nueva subcategoría..."
+                              value={subcategory}
+                              onChange={(e) => setSubcategory(e.target.value)}
+                              className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -675,6 +722,83 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           )}
                         </span>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Módulo de Organización y Gestión de Subcategorías Fijas */}
+                <div className="p-4.5 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-amber-500/10 border border-pink-500/30 space-y-3.5 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-pink-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Star className="w-4 h-4 text-pink-400" />
+                      <span>Organizar Subcategorías Fijas (Ej: Figuras ➔ Roblox)</span>
+                    </label>
+                  </div>
+
+                  {/* Formulario para Agregar Nueva Subcategoría */}
+                  <form onSubmit={handleAddSubcategorySubmit} className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={selectedSubCategoryParent}
+                      onChange={(e) => setSelectedSubCategoryParent(e.target.value)}
+                      className="bg-neutral-950 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                    >
+                      {formCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          En: {cat}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="text"
+                      placeholder="Nombre de subcategoría (ej: Roblox, Anime...)"
+                      value={newSubcategoryInput}
+                      onChange={(e) => setNewSubcategoryInput(e.target.value)}
+                      className="flex-1 bg-neutral-950 border border-white/20 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                    />
+
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-amber-500 hover:opacity-90 text-white text-xs font-bold transition-all shadow-md whitespace-nowrap flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Agregar Subcategoría</span>
+                    </button>
+                  </form>
+
+                  {/* Lista de subcategorías existentes para la categoría seleccionada */}
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block mb-2 tracking-wider">
+                      Subcategorías fijas en "{selectedSubCategoryParent}":
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {(subcategoriesMap[selectedSubCategoryParent] || []).length === 0 ? (
+                        <span className="text-xs text-neutral-500 italic">No hay subcategorías agregadas aún en {selectedSubCategoryParent}.</span>
+                      ) : (
+                        (subcategoriesMap[selectedSubCategoryParent] || []).map((sub) => (
+                          <span
+                            key={sub}
+                            className="text-xs bg-neutral-900 border border-pink-500/30 px-3 py-1.5 rounded-xl text-pink-200 flex items-center gap-2 shadow-sm font-medium"
+                          >
+                            <span>{sub}</span>
+                            {onRemoveSubcategory && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`¿Estás seguro de eliminar la subcategoría "${sub}" de ${selectedSubCategoryParent}?`)) {
+                                    onRemoveSubcategory(selectedSubCategoryParent, sub);
+                                    setNotification(`Subcategoría "${sub}" eliminada de ${selectedSubCategoryParent}.`);
+                                  }
+                                }}
+                                className="text-neutral-500 hover:text-rose-400 transition-colors p-0.5"
+                                title={`Eliminar subcategoría ${sub}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </span>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
