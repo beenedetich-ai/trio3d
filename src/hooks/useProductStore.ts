@@ -16,6 +16,22 @@ export function useProductStore() {
     let isMounted = true;
 
     async function loadProducts() {
+      // First, read any locally cached images mapping to prevent losing multi-image arrays
+      let localImagesMap: Record<string, string[]> = {};
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p: any) => {
+              if (p.id && Array.isArray(p.images) && p.images.length > 0) {
+                localImagesMap[p.id] = p.images;
+              }
+            });
+          }
+        }
+      } catch (_) {}
+
       if (isSupabaseConfigured && supabase) {
         try {
           const { data, error } = await supabase
@@ -48,9 +64,14 @@ export function useProductStore() {
               }));
 
               const { error: seedError } = await supabase.from('products').insert(dbRows);
+              if (seedError && (seedError.message?.includes('images') || seedError.details?.includes('images'))) {
+                // Fallback insert without images column if column is not created in Supabase yet
+                const fallbackRows = dbRows.map(({ images, ...rest }) => rest);
+                await supabase.from('products').insert(fallbackRows);
+              }
               localStorage.setItem(HAS_SEEDED_KEY, 'true');
 
-              if (!seedError && isMounted) {
+              if (isMounted) {
                 setProducts(PRODUCTS);
                 try {
                   localStorage.setItem(STORAGE_KEY, JSON.stringify(PRODUCTS));
@@ -59,11 +80,11 @@ export function useProductStore() {
                 return;
               }
             } else {
-              // Map DB rows directly (even if data is empty [] after user deleted everything)
+              // Map DB rows directly (preserving any multi-images saved in local storage if Supabase lacks column)
               const mapped: Product[] = data.map((item: any) => {
-                const rawImages = Array.isArray(item.images) && item.images.length > 0
+                const rawImages = (Array.isArray(item.images) && item.images.length > 0)
                   ? item.images
-                  : [item.image || '/images/soportes.png'];
+                  : (localImagesMap[item.id] || [item.image || '/images/soportes.png']);
                 return {
                   id: item.id,
                   name: item.name,
@@ -168,28 +189,32 @@ export function useProductStore() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('products').insert([
-          {
-            id: newProduct.id,
-            name: newProduct.name,
-            category: newProduct.category,
-            subcategory: newProduct.subcategory || null,
-            description: newProduct.description,
-            price: newProduct.price,
-            is_popular: newProduct.isPopular ?? false,
-            image: newProduct.image,
-            images: newProduct.images,
-            materials: newProduct.materials,
-            dimensions: newProduct.dimensions || null,
-            tags: newProduct.tags,
-            peso: newProduct.peso || 200,
-            alto: newProduct.alto || 10,
-            ancho: newProduct.ancho || 10,
-            largo: newProduct.largo || 10,
-          },
-        ]);
+        const payload: any = {
+          id: newProduct.id,
+          name: newProduct.name,
+          category: newProduct.category,
+          subcategory: newProduct.subcategory || null,
+          description: newProduct.description,
+          price: newProduct.price,
+          is_popular: newProduct.isPopular ?? false,
+          image: newProduct.image,
+          images: newProduct.images,
+          materials: newProduct.materials,
+          dimensions: newProduct.dimensions || null,
+          tags: newProduct.tags,
+          peso: newProduct.peso || 200,
+          alto: newProduct.alto || 10,
+          ancho: newProduct.ancho || 10,
+          largo: newProduct.largo || 10,
+        };
+
+        const { error } = await supabase.from('products').insert([payload]);
         if (error) {
           console.error('Error inserting product into Supabase:', error);
+          if (error.message?.includes('images') || error.details?.includes('images')) {
+            const { images, ...fallbackPayload } = payload;
+            await supabase.from('products').insert([fallbackPayload]);
+          }
         }
       } catch (err) {
         console.error('Exception inserting product into Supabase:', err);
@@ -237,6 +262,10 @@ export function useProductStore() {
         const { error } = await supabase.from('products').update(dbPayload).eq('id', id);
         if (error) {
           console.error('Error updating product in Supabase:', error);
+          if (error.message?.includes('images') || error.details?.includes('images')) {
+            const { images, ...fallbackPayload } = dbPayload;
+            await supabase.from('products').update(fallbackPayload).eq('id', id);
+          }
         }
       } catch (err) {
         console.error('Exception updating product in Supabase:', err);

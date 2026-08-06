@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Search, MessageCircle, Sparkles, Eye, Star, ShoppingBag, Clock } from 'lucide-react';
+import { Search, MessageCircle, Sparkles, Eye, Star, ShoppingBag, Clock, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CATEGORIES, Product } from '@/data/products';
 import { ProductModal } from './ProductModal';
@@ -246,6 +246,14 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                       <div className="absolute top-3 right-3 z-10 flex items-center gap-1 text-[10px] font-extrabold px-3 py-1 rounded-full bg-brand-500 text-white shadow-lg border border-white/20">
                         <Star className="w-3 h-3 fill-white" />
                         MÁS VENDIDO
+                      </div>
+                    )}
+
+                    {/* Multi-photo Badge */}
+                    {product.images && product.images.length > 1 && (
+                      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-black/75 text-white border border-white/20 backdrop-blur-md shadow">
+                        <ImageIcon className="w-3 h-3 text-brand-400" />
+                        <span>{product.images.length} fotos</span>
                       </div>
                     )}
 
