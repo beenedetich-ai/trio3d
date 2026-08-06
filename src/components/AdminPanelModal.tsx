@@ -63,7 +63,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [subcategory, setSubcategory] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [image, setImage] = useState('/images/soportes.png');
+  const [images, setImages] = useState<string[]>(['/images/soportes.png']);
+  const [urlInput, setUrlInput] = useState('');
   const [materials, setMaterials] = useState('PLA, PETG');
   const [dimensions, setDimensions] = useState('');
   const [tags, setTags] = useState('Personalizable, 3D');
@@ -115,32 +116,91 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Handle local image file upload -> Supabase Storage or Base64 Data URL
+  // Handle local image files upload -> Supabase Storage or Base64 Data URL (up to 5 images max)
   const handleImageFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (images.length >= 5) {
+      alert('Ya has alcanzado el límite máximo de 5 imágenes por producto.');
+      return;
+    }
 
     setIsUploadingImage(true);
+    const newUploadedUrls: string[] = [];
+    const filesArray = Array.from(files);
 
-    if (isSupabaseConfigured) {
-      const publicUrl = await uploadProductImage(file);
-      if (publicUrl) {
-        setImage(publicUrl);
-        setNotification('¡Imagen subida exitosamente a Supabase Storage!');
-        setIsUploadingImage(false);
-        return;
+    for (const file of filesArray) {
+      if (images.length + newUploadedUrls.length >= 5) {
+        alert('Se ha alcanzado el límite máximo de 5 imágenes por producto.');
+        break;
+      }
+
+      if (isSupabaseConfigured) {
+        const publicUrl = await uploadProductImage(file);
+        if (publicUrl) {
+          newUploadedUrls.push(publicUrl);
+          continue;
+        }
+      }
+
+      // Fallback if Supabase not configured or upload failed
+      const base64Url = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.readAsDataURL(file);
+      });
+
+      if (base64Url) {
+        newUploadedUrls.push(base64Url);
       }
     }
 
-    // Fallback if Supabase not configured or upload failed
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        setImage(reader.result);
-      }
-      setIsUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
+    if (newUploadedUrls.length > 0) {
+      setImages((prev) => {
+        // If prev only had default image and we're adding real images, replace default image
+        const cleanPrev = prev.length === 1 && prev[0] === '/images/soportes.png' ? [] : prev;
+        const combined = [...cleanPrev, ...newUploadedUrls].slice(0, 5);
+        return combined;
+      });
+      setNotification(`¡${newUploadedUrls.length} imagen(es) agregada(s) correctamente!`);
+    }
+
+    setIsUploadingImage(false);
+    // Reset file input value
+    e.target.value = '';
+  };
+
+  const handleAddUrlImage = () => {
+    if (!urlInput.trim()) return;
+    if (images.length >= 5) {
+      alert('Ya has alcanzado el límite máximo de 5 imágenes por producto.');
+      return;
+    }
+
+    setImages((prev) => {
+      const cleanPrev = prev.length === 1 && prev[0] === '/images/soportes.png' ? [] : prev;
+      return [...cleanPrev, urlInput.trim()].slice(0, 5);
+    });
+    setUrlInput('');
+    setNotification('¡Enlace de imagen agregado a la lista!');
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setImages((prev) => {
+      const updated = prev.filter((_, idx) => idx !== indexToRemove);
+      return updated.length > 0 ? updated : ['/images/soportes.png'];
+    });
+  };
+
+  const handleMakeCover = (indexToCover: number) => {
+    if (indexToCover === 0) return;
+    setImages((prev) => {
+      const target = prev[indexToCover];
+      const rest = prev.filter((_, idx) => idx !== indexToCover);
+      return [target, ...rest];
+    });
+    setNotification('¡Imagen de portada actualizada!');
   };
 
   const resetForm = () => {
@@ -150,7 +210,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setSubcategory('');
     setDescription('');
     setPrice('');
-    setImage('/images/soportes.png');
+    setImages(['/images/soportes.png']);
+    setUrlInput('');
     setMaterials('PLA, PETG');
     setDimensions('');
     setTags('Personalizable, 3D');
@@ -168,7 +229,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setSubcategory(product.subcategory || '');
     setDescription(product.description);
     setPrice(product.price);
-    setImage(product.image);
+    const prodImages = Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : [product.image || '/images/soportes.png'];
+    setImages(prodImages);
+    setUrlInput('');
     setMaterials(product.materials.join(', '));
     setDimensions(product.dimensions || '');
     setTags(product.tags.join(', '));
@@ -202,13 +267,16 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const numAncho = Math.max(1, parseFloat(String(ancho)) || 10);
     const numLargo = Math.max(1, parseFloat(String(largo)) || 10);
 
+    const finalImages = images.length > 0 ? images.slice(0, 5) : ['/images/soportes.png'];
+
     const productPayload = {
       name,
       category,
       subcategory: subcategory.trim() || undefined,
       description,
       price,
-      image: image || '/images/soportes.png',
+      image: finalImages[0],
+      images: finalImages,
       materials: parsedMaterials.length > 0 ? parsedMaterials : ['PLA'],
       dimensions: dimensions || `${numAlto} x ${numAncho} x ${numLargo} cm`,
       tags: parsedTags.length > 0 ? parsedTags : ['3D'],
@@ -595,60 +663,137 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   {/* Right Column: Image & Options */}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5">
-                        Imagen del Producto
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                          Imágenes del Producto (Máx. 5 fotos)
+                        </label>
+                        <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          images.length >= 5
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-brand-500/15 text-brand-400 border-brand-500/30'
+                        }`}>
+                          {images.length}/5 fotos
+                        </span>
+                      </div>
 
                       {/* File Upload Box */}
-                      <div className="border-2 border-dashed border-white/20 hover:border-brand-500/50 rounded-2xl p-4 text-center transition-colors bg-white/[0.02]">
+                      <div className={`border-2 border-dashed rounded-2xl p-4 text-center transition-colors bg-white/[0.02] ${
+                        images.length >= 5
+                          ? 'border-neutral-700 opacity-60 cursor-not-allowed'
+                          : 'border-white/20 hover:border-brand-500/50 cursor-pointer'
+                      }`}>
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
+                          disabled={images.length >= 5 || isUploadingImage}
                           onChange={handleImageFileUpload}
                           className="hidden"
                           id="admin-image-upload"
                         />
                         <label
-                          htmlFor="admin-image-upload"
-                          className="cursor-pointer flex flex-col items-center justify-center gap-2 text-neutral-300 hover:text-white"
+                          htmlFor={images.length >= 5 ? undefined : "admin-image-upload"}
+                          className={`flex flex-col items-center justify-center gap-2 ${
+                            images.length >= 5 ? 'cursor-not-allowed text-neutral-500' : 'cursor-pointer text-neutral-300 hover:text-white'
+                          }`}
                         >
                           {isUploadingImage ? (
                             <>
                               <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
-                              <span className="text-xs font-bold text-brand-400">Subiendo imagen a la nube...</span>
+                              <span className="text-xs font-bold text-brand-400">Subiendo fotos a la nube...</span>
+                            </>
+                          ) : images.length >= 5 ? (
+                            <>
+                              <ImageIcon className="w-8 h-8 text-amber-500" />
+                              <span className="text-xs font-bold text-amber-400">Límite alcanzado (5/5 fotos)</span>
+                              <span className="text-[10px] text-neutral-500">Elimina una foto para subir otra</span>
                             </>
                           ) : (
                             <>
                               <Upload className="w-8 h-8 text-brand-500" />
-                              <span className="text-xs font-bold">Subir foto desde tu computadora</span>
-                              <span className="text-[10px] text-neutral-500">PNG, JPG, WEBP de alta calidad</span>
+                              <span className="text-xs font-bold">Subir foto(s) desde tu computadora</span>
+                              <span className="text-[10px] text-neutral-500">Podés seleccionar hasta 5 fotos (PNG, JPG, WEBP)</span>
                             </>
                           )}
                         </label>
                       </div>
 
                       {/* URL input fallback */}
-                      <div className="mt-3">
-                        <span className="text-[11px] text-neutral-400 block mb-1">O pegar enlace URL de imagen:</span>
+                      <div className="mt-3 flex gap-2">
                         <input
                           type="text"
-                          placeholder="https://..."
-                          value={image}
-                          onChange={(e) => setImage(e.target.value)}
-                          className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                          placeholder="O pegar enlace URL de foto (https://...)"
+                          value={urlInput}
+                          onChange={(e) => setUrlInput(e.target.value)}
+                          disabled={images.length >= 5}
+                          className="flex-1 bg-white/[0.04] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
                         />
+                        <button
+                          type="button"
+                          onClick={handleAddUrlImage}
+                          disabled={!urlInput.trim() || images.length >= 5}
+                          className="px-3 py-2 rounded-xl bg-brand-500/20 text-brand-400 hover:bg-brand-500 hover:text-white disabled:opacity-40 disabled:hover:bg-brand-500/20 text-xs font-bold transition-colors border border-brand-500/30 whitespace-nowrap"
+                        >
+                          + Agregar
+                        </button>
                       </div>
 
-                      {/* Live Image Preview */}
-                      <div className="mt-3 relative h-36 w-full rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 flex items-center justify-center">
-                        {image ? (
-                          <img src={image} alt="Vista previa" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="text-neutral-500 text-xs flex items-center gap-2">
-                            <ImageIcon className="w-5 h-5" />
-                            <span>Sin vista previa</span>
-                          </div>
-                        )}
+                      {/* Image Thumbnails Gallery */}
+                      <div className="mt-3 space-y-2">
+                        <span className="text-[11px] font-bold text-neutral-400 block uppercase tracking-wider">
+                          Galería cargada ({images.length} de 5):
+                        </span>
+                        <div className="grid grid-cols-5 gap-2">
+                          {images.map((imgUrl, idx) => {
+                            const isCover = idx === 0;
+                            return (
+                              <div
+                                key={idx}
+                                className={`relative group aspect-square rounded-xl overflow-hidden bg-neutral-900 border transition-all ${
+                                  isCover ? 'border-brand-500 ring-2 ring-brand-500/30' : 'border-white/10 hover:border-white/30'
+                                }`}
+                              >
+                                <img src={imgUrl} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                                
+                                {/* Badge Cover */}
+                                {isCover ? (
+                                  <span className="absolute top-1 left-1 bg-brand-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
+                                    Portada
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMakeCover(idx)}
+                                    className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 bg-black/70 hover:bg-brand-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded transition-all"
+                                    title="Hacer portada"
+                                  >
+                                    Portada
+                                  </button>
+                                )}
+
+                                {/* Delete button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveImage(idx)}
+                                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-rose-600 text-white p-1 rounded-full hover:bg-rose-700 transition-all shadow"
+                                  title="Eliminar foto"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          {/* Empty slots placeholders if less than 5 */}
+                          {Array.from({ length: Math.max(0, 5 - images.length) }).map((_, slotIdx) => (
+                            <div
+                              key={`empty-${slotIdx}`}
+                              className="aspect-square rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex items-center justify-center text-neutral-600 text-[10px] font-mono"
+                            >
+                              + Slot
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
 

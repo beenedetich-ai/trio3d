@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { X, Check, ShoppingBag, MessageCircle, Maximize2, Layers, Clock, Scale } from 'lucide-react';
+import { X, Check, ShoppingBag, MessageCircle, Maximize2, Layers, Clock, Scale, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '@/data/products';
 import { formatPrice } from '@/utils/formatPrice';
 
@@ -16,10 +16,32 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [customColor, setCustomColor] = useState<string>('');
   const [customNotes, setCustomNotes] = useState<string>('');
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setSelectedMaterial('');
+    setCustomColor('');
+    setCustomNotes('');
+  }, [product?.id]);
 
   if (!product) return null;
 
   const currentMaterial = selectedMaterial || product.materials[0];
+
+  const productImages = (product.images && product.images.length > 0)
+    ? product.images
+    : [product.image || '/images/soportes.png'];
+
+  const activeImage = productImages[selectedImageIndex] || productImages[0];
+
+  const handlePrevImage = () => {
+    setSelectedImageIndex((prev) => (prev === 0 ? productImages.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = () => {
+    setSelectedImageIndex((prev) => (prev === productImages.length - 1 ? 0 : prev + 1));
+  };
 
   const handleSendWhatsApp = () => {
     let msg = `¡Hola Trío 3D! Quisiera consultar/encargar el producto: *${product.name}*.\n`;
@@ -51,21 +73,73 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
           <X className="w-5 h-5" />
         </button>
 
-        {/* Left: Product Image */}
-        <div className="md:w-1/2 relative bg-neutral-950 min-h-[280px] md:min-h-[420px] flex items-center justify-center p-6">
-          <Image
-            src={product.image}
-            alt={product.name}
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-transparent to-transparent md:hidden" />
-          
-          <div className="absolute bottom-4 left-4 z-10">
-            <span className="px-3 py-1 rounded-full bg-brand-500/90 text-white text-xs font-bold shadow-md">
-              {formatPrice(product.price)}
-            </span>
+        {/* Left: Product Image & Gallery */}
+        <div className="md:w-1/2 relative bg-neutral-950 min-h-[300px] md:min-h-[440px] flex flex-col justify-between p-4">
+          <div className="relative w-full flex-1 rounded-2xl overflow-hidden min-h-[240px]">
+            <Image
+              key={activeImage}
+              src={activeImage}
+              alt={product.name}
+              fill
+              className="object-cover transition-all duration-300"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-transparent to-transparent md:hidden" />
+
+            {/* Navigation Arrows */}
+            {productImages.length > 1 && (
+              <>
+                <button
+                  onClick={handlePrevImage}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-brand-500 transition-colors backdrop-blur-md"
+                  aria-label="Foto anterior"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleNextImage}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-black/60 text-white hover:bg-brand-500 transition-colors backdrop-blur-md"
+                  aria-label="Foto siguiente"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            {/* Price Badge */}
+            <div className="absolute bottom-3 left-3 z-10">
+              <span className="px-3 py-1 rounded-full bg-brand-500/90 text-white text-xs font-bold shadow-md">
+                {formatPrice(product.price)}
+              </span>
+            </div>
+
+            {/* Counter Badge if > 1 image */}
+            {productImages.length > 1 && (
+              <div className="absolute top-3 left-3 z-10">
+                <span className="px-2.5 py-0.5 rounded-full bg-black/70 text-neutral-200 text-[10px] font-mono font-bold border border-white/20">
+                  {selectedImageIndex + 1} / {productImages.length}
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Thumbnails Selector */}
+          {productImages.length > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-3 overflow-x-auto pb-1 scrollbar-none">
+              {productImages.map((img, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`relative w-12 h-12 rounded-xl overflow-hidden border-2 transition-all flex-shrink-0 ${
+                    selectedImageIndex === index
+                      ? 'border-brand-500 scale-105 shadow-md shadow-brand-500/30'
+                      : 'border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
+                  }`}
+                >
+                  <img src={img} alt={`Vista ${index + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right: Product Details & Customization */}

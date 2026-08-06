@@ -37,6 +37,7 @@ export function useProductStore() {
                 price: p.price,
                 is_popular: p.isPopular ?? false,
                 image: p.image,
+                images: p.images && p.images.length > 0 ? p.images : [p.image],
                 materials: p.materials,
                 dimensions: p.dimensions || null,
                 tags: p.tags,
@@ -59,23 +60,29 @@ export function useProductStore() {
               }
             } else {
               // Map DB rows directly (even if data is empty [] after user deleted everything)
-              const mapped: Product[] = data.map((item: any) => ({
-                id: item.id,
-                name: item.name,
-                category: item.category,
-                subcategory: item.subcategory || '',
-                description: item.description || '',
-                price: item.price || '0',
-                isPopular: item.is_popular ?? false,
-                image: item.image || '/images/soportes.png',
-                materials: Array.isArray(item.materials) ? item.materials : ['PLA'],
-                dimensions: item.dimensions || '',
-                tags: Array.isArray(item.tags) ? item.tags : ['3D'],
-                peso: item.peso || 200,
-                alto: item.alto || 10,
-                ancho: item.ancho || 10,
-                largo: item.largo || 10,
-              }));
+              const mapped: Product[] = data.map((item: any) => {
+                const rawImages = Array.isArray(item.images) && item.images.length > 0
+                  ? item.images
+                  : [item.image || '/images/soportes.png'];
+                return {
+                  id: item.id,
+                  name: item.name,
+                  category: item.category,
+                  subcategory: item.subcategory || '',
+                  description: item.description || '',
+                  price: item.price || '0',
+                  isPopular: item.is_popular ?? false,
+                  image: item.image || rawImages[0] || '/images/soportes.png',
+                  images: rawImages,
+                  materials: Array.isArray(item.materials) ? item.materials : ['PLA'],
+                  dimensions: item.dimensions || '',
+                  tags: Array.isArray(item.tags) ? item.tags : ['3D'],
+                  peso: item.peso || 200,
+                  alto: item.alto || 10,
+                  ancho: item.ancho || 10,
+                  largo: item.largo || 10,
+                };
+              });
 
               if (isMounted) {
                 setProducts(mapped);
@@ -102,8 +109,13 @@ export function useProductStore() {
             const migrated = parsed.map((p: Product) => {
               let finalPeso = typeof p.peso === 'number' && p.peso > 0 ? p.peso : 200;
               if (finalPeso < 5) finalPeso = Math.round(finalPeso * 1000);
+              const rawImgs = Array.isArray(p.images) && p.images.length > 0
+                ? p.images
+                : [p.image || '/images/soportes.png'];
               return {
                 ...p,
+                image: p.image || rawImgs[0],
+                images: rawImgs,
                 peso: finalPeso,
                 alto: typeof p.alto === 'number' && p.alto > 0 ? p.alto : 10,
                 ancho: typeof p.ancho === 'number' && p.ancho > 0 ? p.ancho : 10,
@@ -141,8 +153,13 @@ export function useProductStore() {
   // Add new product
   const addProduct = async (newProductData: Omit<Product, 'id'>) => {
     const id = `custom-${Date.now()}`;
+    const rawImages = newProductData.images && newProductData.images.length > 0
+      ? newProductData.images.slice(0, 5)
+      : [newProductData.image || '/images/soportes.png'];
     const newProduct: Product = {
       ...newProductData,
+      image: rawImages[0],
+      images: rawImages,
       id,
     };
 
@@ -161,6 +178,7 @@ export function useProductStore() {
             price: newProduct.price,
             is_popular: newProduct.isPopular ?? false,
             image: newProduct.image,
+            images: newProduct.images,
             materials: newProduct.materials,
             dimensions: newProduct.dimensions || null,
             tags: newProduct.tags,
@@ -181,7 +199,16 @@ export function useProductStore() {
 
   // Edit existing product
   const editProduct = async (id: string, updatedData: Partial<Product>) => {
-    const updated = products.map((p) => (p.id === id ? { ...p, ...updatedData } : p));
+    const updated = products.map((p) => {
+      if (p.id === id) {
+        const mergedImages = updatedData.images !== undefined
+          ? updatedData.images
+          : (updatedData.image ? [updatedData.image] : (p.images || [p.image]));
+        const mainImage = mergedImages[0] || updatedData.image || p.image;
+        return { ...p, ...updatedData, image: mainImage, images: mergedImages };
+      }
+      return p;
+    });
     saveLocalState(updated);
 
     if (isSupabaseConfigured && supabase) {
@@ -193,7 +220,12 @@ export function useProductStore() {
         if (updatedData.description !== undefined) dbPayload.description = updatedData.description;
         if (updatedData.price !== undefined) dbPayload.price = updatedData.price;
         if (updatedData.isPopular !== undefined) dbPayload.is_popular = updatedData.isPopular;
-        if (updatedData.image !== undefined) dbPayload.image = updatedData.image;
+        if (updatedData.images !== undefined) {
+          dbPayload.images = updatedData.images;
+          if (updatedData.images.length > 0) dbPayload.image = updatedData.images[0];
+        } else if (updatedData.image !== undefined) {
+          dbPayload.image = updatedData.image;
+        }
         if (updatedData.materials !== undefined) dbPayload.materials = updatedData.materials;
         if (updatedData.dimensions !== undefined) dbPayload.dimensions = updatedData.dimensions;
         if (updatedData.tags !== undefined) dbPayload.tags = updatedData.tags;
@@ -245,6 +277,7 @@ export function useProductStore() {
           price: p.price,
           is_popular: p.isPopular ?? false,
           image: p.image,
+          images: p.images && p.images.length > 0 ? p.images : [p.image],
           materials: p.materials,
           dimensions: p.dimensions || null,
           tags: p.tags,

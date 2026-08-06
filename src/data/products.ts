@@ -7,6 +7,7 @@ export interface Product {
   price: string;
   isPopular?: boolean;
   image: string;
+  images?: string[];
   materials: string[];
   dimensions?: string;
   tags: string[];
