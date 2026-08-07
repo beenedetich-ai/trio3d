@@ -68,6 +68,22 @@ export function useCategoryStore() {
     let isMounted = true;
 
     async function loadCategories() {
+      // 1. Read local storage cache first to preserve custom URLs & descriptions
+      let localCatMap: Record<string, CategoryItem> = {};
+      try {
+        const stored = localStorage.getItem(CATEGORY_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((c: CategoryItem) => {
+              if (c && c.name) {
+                localCatMap[c.name.toLowerCase()] = c;
+              }
+            });
+          }
+        }
+      } catch (_) {}
+
       if (isSupabaseConfigured && supabase) {
         try {
           const { data, error } = await supabase
@@ -77,14 +93,15 @@ export function useCategoryStore() {
 
           if (!error && data && data.length > 0) {
             const fetched: CategoryItem[] = data.map((item: any) => {
+              const localMatch = localCatMap[item.name.toLowerCase()];
               const defaultMatch = DEFAULT_CATEGORY_ITEMS.find(
                 (d) => d.name.toLowerCase() === item.name.toLowerCase()
               );
               return {
                 name: item.name,
-                badge: item.badge || defaultMatch?.badge || 'Impresión 3D',
-                desc: item.description || defaultMatch?.desc || 'Productos y diseños impresos en 3D de alta calidad.',
-                image: item.image || defaultMatch?.image || '/images/hero.png',
+                badge: item.badge || localMatch?.badge || defaultMatch?.badge || 'Impresión 3D',
+                desc: item.description || localMatch?.desc || defaultMatch?.desc || 'Productos y diseños impresos en 3D de alta calidad.',
+                image: item.image || localMatch?.image || defaultMatch?.image || '/images/hero.png',
                 featured: defaultMatch?.featured ?? false,
               };
             });
