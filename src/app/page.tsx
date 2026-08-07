@@ -34,7 +34,9 @@ export default function Home() {
 
   const {
     categories,
+    categoryItems,
     addCategory,
+    editCategory,
     removeCategory,
   } = useCategoryStore();
 
@@ -66,8 +68,8 @@ export default function Home() {
       {/* 1. Hero Principal */}
       <Hero />
 
-      {/* 2. Sección de Categorías */}
-      <Categories onSelectCategory={setSelectedCategory} />
+      {/* 2. Sección de Categorías Dinámicas */}
+      <Categories onSelectCategory={setSelectedCategory} categoriesList={categoryItems} />
 
       {/* 3. Galería de Productos */}
       <ProductGallery
@@ -112,18 +114,20 @@ export default function Home() {
         getTotalItems={getTotalItems}
       />
 
-      {/* Admin Panel Modal (Without Code) */}
+      {/* Admin Panel Modal (With Category Management) */}
       <AdminPanelModal
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         products={products}
         categories={categories}
+        categoryItems={categoryItems}
         subcategoriesMap={subcategoriesMap}
         onAddProduct={addProduct}
         onEditProduct={editProduct}
         onDeleteProduct={deleteProduct}
         onResetCatalog={resetToDefault}
         onAddCategory={addCategory}
+        onEditCategory={editCategory}
         onRemoveCategory={removeCategory}
         onAddSubcategory={addSubcategory}
         onRemoveSubcategory={removeSubcategory}

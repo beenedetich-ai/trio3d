@@ -4,10 +4,64 @@ import { useState, useEffect } from 'react';
 import { CATEGORIES } from '@/data/products';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
-const CATEGORY_STORAGE_KEY = 'trio3d_categories_v2';
+export interface CategoryItem {
+  name: string;
+  badge?: string;
+  desc?: string;
+  image?: string;
+  featured?: boolean;
+}
+
+export const DEFAULT_CATEGORY_ITEMS: CategoryItem[] = [
+  {
+    name: 'Llaveros',
+    desc: 'Nombres, logos de empresas, formas bicolores y destapadores.',
+    image: '/images/soportes.png',
+    badge: 'Personalizables',
+  },
+  {
+    name: 'Decoración',
+    desc: 'Jarrones geométricos, piezas artísticas en espiral y esculturas.',
+    image: '/images/decoracion.png',
+    badge: 'Diseño Exclusivo',
+  },
+  {
+    name: 'Soportes',
+    desc: 'Soportes gamer para auris, celulares, joysticks y notebooks.',
+    image: '/images/soportes.png',
+    badge: 'Ergonómicos',
+  },
+  {
+    name: 'Macetas',
+    desc: 'Macetas Voronoi, autorregantes y geométricas para suculentas.',
+    image: '/images/macetas.png',
+    badge: 'Impermeables',
+  },
+  {
+    name: 'Regalos personalizados',
+    desc: 'Litofanías con luz LED, cuadros 3D con foto y placas de nombre.',
+    image: '/images/decoracion.png',
+    badge: 'Emotivos',
+  },
+  {
+    name: 'Figuras',
+    desc: 'Figuras coleccionables, personajes, mechas y piezas articuladas flexi.',
+    image: '/images/figuras.png',
+    badge: 'Máximo Detalle',
+  },
+  {
+    name: 'Diseño a medida',
+    desc: 'Diseño personalizado de maquetas, repuestos y carcasas a medida.',
+    image: '/images/hero.png',
+    badge: 'Proyectos 3D',
+    featured: true,
+  },
+];
+
+const CATEGORY_STORAGE_KEY = 'trio3d_category_items_v3';
 
 export function useCategoryStore() {
-  const [categories, setCategories] = useState<string[]>(Array.from(CATEGORIES));
+  const [categoryItems, setCategoryItems] = useState<CategoryItem[]>(DEFAULT_CATEGORY_ITEMS);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -18,16 +72,27 @@ export function useCategoryStore() {
         try {
           const { data, error } = await supabase
             .from('categories')
-            .select('name')
+            .select('*')
             .order('created_at', { ascending: true });
 
           if (!error && data && data.length > 0) {
-            const fetched = data.map((item: any) => item.name);
-            const unique = Array.from(new Set(['Todos', ...fetched]));
+            const fetched: CategoryItem[] = data.map((item: any) => {
+              const defaultMatch = DEFAULT_CATEGORY_ITEMS.find(
+                (d) => d.name.toLowerCase() === item.name.toLowerCase()
+              );
+              return {
+                name: item.name,
+                badge: item.badge || defaultMatch?.badge || 'Impresión 3D',
+                desc: item.description || defaultMatch?.desc || 'Productos y diseños impresos en 3D de alta calidad.',
+                image: item.image || defaultMatch?.image || '/images/hero.png',
+                featured: defaultMatch?.featured ?? false,
+              };
+            });
+
             if (isMounted) {
-              setCategories(unique);
+              setCategoryItems(fetched);
               try {
-                localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(unique));
+                localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(fetched));
               } catch (_) {}
               setIsLoaded(true);
               return;
@@ -44,8 +109,7 @@ export function useCategoryStore() {
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const unique = Array.from(new Set(['Todos', ...parsed]));
-            if (isMounted) setCategories(unique);
+            if (isMounted) setCategoryItems(parsed);
           }
         }
       } catch (error) {
@@ -62,36 +126,85 @@ export function useCategoryStore() {
     };
   }, []);
 
-  const saveCategories = async (newCategories: string[]) => {
-    const cleanList = Array.from(new Set(['Todos', ...newCategories.filter((c) => c !== 'Todos')]));
-    setCategories(cleanList);
+  const saveCategoryItems = (newItems: CategoryItem[]) => {
+    setCategoryItems(newItems);
     try {
-      localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(cleanList));
+      localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(newItems));
     } catch (error) {
       console.error('Error saving categories to localStorage:', error);
     }
   };
 
-  const addCategory = async (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return false;
+  const addCategory = async (input: string | CategoryItem) => {
+    const newItem: CategoryItem = typeof input === 'string'
+      ? {
+          name: input.trim(),
+          badge: 'Novedad',
+          desc: 'Nuevos modelos y accesorios impresos en 3D.',
+          image: '/images/hero.png',
+        }
+      : {
+          name: input.name.trim(),
+          badge: input.badge?.trim() || 'Novedad',
+          desc: input.desc?.trim() || 'Nuevos modelos y accesorios impresos en 3D.',
+          image: input.image || '/images/hero.png',
+        };
 
-    if (categories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
-      alert(`La categoría "${trimmed}" ya existe.`);
+    if (!newItem.name) return false;
+
+    if (categoryItems.some((c) => c.name.toLowerCase() === newItem.name.toLowerCase())) {
+      alert(`La categoría "${newItem.name}" ya existe.`);
       return false;
     }
 
-    const updated = [...categories, trimmed];
-    saveCategories(updated);
+    const updated = [...categoryItems, newItem];
+    saveCategoryItems(updated);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('categories').insert([{ name: trimmed }]);
+        const dbPayload = {
+          name: newItem.name,
+          badge: newItem.badge,
+          description: newItem.desc,
+          image: newItem.image,
+        };
+        const { error } = await supabase.from('categories').insert([dbPayload]);
+        if (error && (error.message?.includes('badge') || error.message?.includes('description') || error.message?.includes('image'))) {
+          // Retry inserting without optional columns if DB schema not updated yet
+          await supabase.from('categories').insert([{ name: newItem.name }]);
+        }
       } catch (err) {
         console.error('Error adding category to Supabase:', err);
       }
     }
     return true;
+  };
+
+  const editCategory = async (name: string, updatedData: Partial<CategoryItem>) => {
+    const updated = categoryItems.map((c) =>
+      c.name.toLowerCase() === name.toLowerCase() ? { ...c, ...updatedData } : c
+    );
+    saveCategoryItems(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const dbPayload: any = {};
+        if (updatedData.name !== undefined) dbPayload.name = updatedData.name;
+        if (updatedData.badge !== undefined) dbPayload.badge = updatedData.badge;
+        if (updatedData.desc !== undefined) dbPayload.description = updatedData.desc;
+        if (updatedData.image !== undefined) dbPayload.image = updatedData.image;
+
+        const { error } = await supabase.from('categories').update(dbPayload).eq('name', name);
+        if (error && (error.message?.includes('badge') || error.message?.includes('description') || error.message?.includes('image'))) {
+          const { badge, description, image, ...fallback } = dbPayload;
+          if (Object.keys(fallback).length > 0) {
+            await supabase.from('categories').update(fallback).eq('name', name);
+          }
+        }
+      } catch (err) {
+        console.error('Error editing category in Supabase:', err);
+      }
+    }
   };
 
   const removeCategory = async (name: string) => {
@@ -100,8 +213,8 @@ export function useCategoryStore() {
       return false;
     }
 
-    const updated = categories.filter((c) => c !== name);
-    saveCategories(updated);
+    const updated = categoryItems.filter((c) => c.name.toLowerCase() !== name.toLowerCase());
+    saveCategoryItems(updated);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -114,14 +227,18 @@ export function useCategoryStore() {
   };
 
   const resetCategories = () => {
-    saveCategories(Array.from(CATEGORIES));
+    saveCategoryItems(DEFAULT_CATEGORY_ITEMS);
   };
 
+  const categoryNames = ['Todos', ...categoryItems.map((c) => c.name)];
+
   return {
-    categories,
-    formCategories: categories.filter((c) => c !== 'Todos'),
+    categoryItems,
+    categories: categoryNames,
+    formCategories: categoryNames.filter((c) => c !== 'Todos'),
     isLoaded,
     addCategory,
+    editCategory,
     removeCategory,
     resetCategories,
   };

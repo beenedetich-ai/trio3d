@@ -5,6 +5,7 @@ import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, Refres
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product, CATEGORIES } from '@/data/products';
 import { SubcategoryMap, DEFAULT_SUBCATEGORIES } from '@/hooks/useSubcategoryStore';
+import { CategoryItem } from '@/hooks/useCategoryStore';
 import { uploadProductImage, isSupabaseConfigured } from '@/lib/supabase';
 
 interface AdminPanelModalProps {
@@ -12,12 +13,14 @@ interface AdminPanelModalProps {
   onClose: () => void;
   products: Product[];
   categories?: string[];
+  categoryItems?: CategoryItem[];
   subcategoriesMap?: SubcategoryMap;
   onAddProduct: (productData: Omit<Product, 'id'>) => void;
   onEditProduct: (id: string, updatedData: Partial<Product>) => void;
   onDeleteProduct: (id: string) => void;
   onResetCatalog: () => void;
-  onAddCategory?: (categoryName: string) => Promise<boolean | void> | boolean | void;
+  onAddCategory?: (category: string | CategoryItem) => Promise<boolean | void> | boolean | void;
+  onEditCategory?: (name: string, updatedData: Partial<CategoryItem>) => Promise<boolean | void> | boolean | void;
   onRemoveCategory?: (categoryName: string) => Promise<boolean | void> | boolean | void;
   onAddSubcategory?: (categoryName: string, subcategoryName: string) => Promise<boolean | void> | boolean | void;
   onRemoveSubcategory?: (categoryName: string, subcategoryName: string) => Promise<boolean | void> | boolean | void;
@@ -28,12 +31,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onClose,
   products,
   categories = CATEGORIES as unknown as string[],
+  categoryItems = [],
   subcategoriesMap = DEFAULT_SUBCATEGORIES,
   onAddProduct,
   onEditProduct,
   onDeleteProduct,
   onResetCatalog,
   onAddCategory,
+  onEditCategory,
   onRemoveCategory,
   onAddSubcategory,
   onRemoveSubcategory,
@@ -88,17 +93,79 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Active subcategories for selected form category
   const activeSubcategoriesForCategory = subcategoriesMap[category] || [];
 
-  const handleAddCategorySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCategoryInput.trim()) return;
-    if (onAddCategory) {
-      const ok = await onAddCategory(newCategoryInput.trim());
-      if (ok !== false) {
-        setCategory(newCategoryInput.trim() as any);
-        setNewCategoryInput('');
-        setNotification(`¡Categoría "${newCategoryInput.trim()}" agregada con éxito!`);
+  // Category Form State
+  const [catNameInput, setCatNameInput] = useState('');
+  const [catBadgeInput, setCatBadgeInput] = useState('Novedad');
+  const [catDescInput, setCatDescInput] = useState('');
+  const [catImageInput, setCatImageInput] = useState('/images/hero.png');
+  const [editingCategoryName, setEditingCategoryName] = useState<string | null>(null);
+  const [isUploadingCatImage, setIsUploadingCatImage] = useState(false);
+
+  const resetCategoryForm = () => {
+    setEditingCategoryName(null);
+    setCatNameInput('');
+    setCatBadgeInput('Novedad');
+    setCatDescInput('');
+    setCatImageInput('/images/hero.png');
+  };
+
+  const handleCatImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCatImage(true);
+    if (isSupabaseConfigured) {
+      const publicUrl = await uploadProductImage(file);
+      if (publicUrl) {
+        setCatImageInput(publicUrl);
+        setIsUploadingCatImage(false);
+        return;
       }
     }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') setCatImageInput(reader.result);
+      setIsUploadingCatImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catNameInput.trim()) {
+      alert('Por favor ingresá el nombre de la categoría.');
+      return;
+    }
+
+    const payload: CategoryItem = {
+      name: catNameInput.trim(),
+      badge: catBadgeInput.trim() || 'Novedad',
+      desc: catDescInput.trim() || 'Productos y diseños impresos en 3D de alta precisión.',
+      image: catImageInput || '/images/hero.png',
+    };
+
+    if (editingCategoryName) {
+      if (onEditCategory) {
+        await onEditCategory(editingCategoryName, payload);
+        setNotification(`¡Categoría "${editingCategoryName}" actualizada correctamente!`);
+      }
+    } else {
+      if (onAddCategory) {
+        const ok = await onAddCategory(payload);
+        if (ok !== false) {
+          setCategory(payload.name as any);
+          setNotification(`¡Categoría "${payload.name}" creada con éxito!`);
+        }
+      }
+    }
+    resetCategoryForm();
+  };
+
+  const handleEditCategoryClick = (catItem: CategoryItem) => {
+    setEditingCategoryName(catItem.name);
+    setCatNameInput(catItem.name);
+    setCatBadgeInput(catItem.badge || 'Novedad');
+    setCatDescInput(catItem.desc || '');
+    setCatImageInput(catItem.image || '/images/hero.png');
   };
 
   const handleAddSubcategorySubmit = async (e: React.FormEvent) => {
@@ -844,63 +911,168 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             {activeTab === 'list' && (
               <div className="space-y-6">
                 {/* Módulo de Organización y Gestión de Categorías */}
-                <div className="p-4.5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-amber-500/10 border border-brand-500/30 space-y-3.5 shadow-lg">
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-amber-500/10 border border-brand-500/30 space-y-4 shadow-lg">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-black text-brand-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Plus className="w-4 h-4 text-brand-400" />
-                      <span>Organizar Categorías del Catálogo</span>
+                      <span>{editingCategoryName ? `Editar Categoría "${editingCategoryName}"` : 'Crear Nueva Categoría para la Portada'}</span>
                     </label>
                     <span className="text-[11px] text-neutral-300 font-semibold px-2.5 py-0.5 rounded-full bg-white/10 border border-white/15">
-                      {formCategories.length} categorías activas
+                      {categoryItems.length} rubros activos
                     </span>
                   </div>
 
-                  {/* Formulario para Agregar Nueva Categoría */}
-                  <form onSubmit={handleAddCategorySubmit} className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Escribí un nuevo nombre de categoría..."
-                      value={newCategoryInput}
-                      onChange={(e) => setNewCategoryInput(e.target.value)}
-                      className="flex-1 bg-neutral-950 border border-white/20 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 hover:opacity-90 text-white text-xs font-bold transition-all shadow-md shadow-pink-500/20 whitespace-nowrap flex items-center gap-1.5"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Agregar Categoría</span>
-                    </button>
+                  {/* Formulario Completo de Categoría */}
+                  <form onSubmit={handleSaveCategorySubmit} className="space-y-3 bg-neutral-950/60 p-4 rounded-xl border border-white/10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-neutral-300 uppercase mb-1">
+                          Nombre de la Categoría *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: Llaveros, Iluminación..."
+                          value={catNameInput}
+                          onChange={(e) => setCatNameInput(e.target.value)}
+                          className="w-full bg-neutral-900 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-neutral-300 uppercase mb-1">
+                          Insignia / Badge (Pill)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Personalizables, Novedad, Ergonómicos..."
+                          value={catBadgeInput}
+                          onChange={(e) => setCatBadgeInput(e.target.value)}
+                          className="w-full bg-neutral-900 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-neutral-300 uppercase mb-1">
+                        Descripción Corta (se muestra en la tarjeta de la portada)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Nombres, logos de empresas, formas bicolores..."
+                        value={catDescInput}
+                        onChange={(e) => setCatDescInput(e.target.value)}
+                        className="w-full bg-neutral-900 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-neutral-300 uppercase mb-1">
+                        Imagen de la Categoría
+                      </label>
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-neutral-200 text-xs font-bold border border-white/15 flex items-center gap-1.5 transition-colors whitespace-nowrap">
+                          {isUploadingCatImage ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+                          ) : (
+                            <Upload className="w-4 h-4 text-brand-500" />
+                          )}
+                          <span>Subir Foto</span>
+                          <input type="file" accept="image/*" onChange={handleCatImageUpload} className="hidden" />
+                        </label>
+
+                        <input
+                          type="text"
+                          placeholder="O pegar URL de imagen (https://...)"
+                          value={catImageInput}
+                          onChange={(e) => setCatImageInput(e.target.value)}
+                          className="flex-1 w-full bg-neutral-900 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                        />
+
+                        {catImageInput && (
+                          <div className="w-9 h-9 rounded-lg overflow-hidden bg-neutral-900 border border-white/20 flex-shrink-0">
+                            <img src={catImageInput} alt="Vista previa" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-end gap-2">
+                      {editingCategoryName && (
+                        <button
+                          type="button"
+                          onClick={resetCategoryForm}
+                          className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold"
+                        >
+                          Cancelar Edición
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 hover:opacity-90 text-white text-xs font-extrabold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{editingCategoryName ? 'Guardar Cambios de Categoría' : 'Guardar Nueva Categoría'}</span>
+                      </button>
+                    </div>
                   </form>
 
-                  {/* Lista de categorías existentes con botón para eliminar */}
+                  {/* Lista de categorías existentes con miniaturas y botón de edición */}
                   <div>
                     <span className="text-[10px] uppercase font-bold text-neutral-400 block mb-2 tracking-wider">
-                      Categorías Disponibles (Haz clic en 🗑️ para eliminar):
+                      Categorías Activas en la Portada (haz clic en ✏️ para editar o 🗑️ para eliminar):
                     </span>
-                    <div className="flex flex-wrap gap-2">
-                      {formCategories.map((c) => (
-                        <span
-                          key={c}
-                          className="text-xs bg-neutral-900 border border-white/15 px-3 py-1.5 rounded-xl text-neutral-200 flex items-center gap-2 shadow-sm font-medium"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {categoryItems.map((catItem) => (
+                        <div
+                          key={catItem.name}
+                          className="p-3 rounded-xl bg-neutral-900 border border-white/15 flex items-center justify-between gap-3 shadow-sm hover:border-brand-500/40 transition-colors"
                         >
-                          <span>{c}</span>
-                          {onRemoveCategory && (
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-neutral-950 flex-shrink-0 border border-white/10">
+                              <img src={catItem.image || '/images/hero.png'} alt={catItem.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <h5 className="text-xs font-bold text-white truncate">{catItem.name}</h5>
+                                {catItem.badge && (
+                                  <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-white/10 text-brand-300 rounded border border-white/15">
+                                    {catItem.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-neutral-400 truncate font-light mt-0.5">
+                                {catItem.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (confirm(`¿Estás seguro de eliminar la categoría "${c}"?`)) {
-                                  onRemoveCategory(c);
-                                  setNotification(`Categoría "${c}" eliminada.`);
-                                }
-                              }}
-                              className="text-neutral-500 hover:text-rose-400 transition-colors p-0.5"
-                              title={`Eliminar categoría ${c}`}
+                              onClick={() => handleEditCategoryClick(catItem)}
+                              className="p-1.5 rounded-lg bg-brand-500/20 text-brand-400 hover:bg-brand-500 hover:text-white transition-colors"
+                              title={`Editar categoría ${catItem.name}`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </span>
+                            {onRemoveCategory && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`¿Estás seguro de eliminar la categoría "${catItem.name}"?`)) {
+                                    onRemoveCategory(catItem.name);
+                                    setNotification(`Categoría "${catItem.name}" eliminada.`);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white transition-colors"
+                                title={`Eliminar categoría ${catItem.name}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>

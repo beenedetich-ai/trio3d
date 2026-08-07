@@ -2,66 +2,29 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Key, Sparkles, Headphones, Flower2, Gift, Bot, PenTool, ArrowUpRight } from 'lucide-react';
+import { Key, Sparkles, Headphones, Flower2, Gift, Bot, PenTool, Layers, ArrowUpRight, LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { CategoryItem, DEFAULT_CATEGORY_ITEMS } from '@/hooks/useCategoryStore';
 
 interface CategoriesProps {
   onSelectCategory: (category: string) => void;
+  categoriesList?: CategoryItem[];
 }
 
-export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory }) => {
-  const categoriesList = [
-    {
-      name: 'Llaveros',
-      icon: Key,
-      desc: 'Nombres, logos de empresas, formas bicolores y destapadores.',
-      image: '/images/soportes.png',
-      badge: 'Personalizables',
-    },
-    {
-      name: 'Decoración',
-      icon: Sparkles,
-      desc: 'Jarrones geométricos, piezas artísticas en espiral y esculturas.',
-      image: '/images/decoracion.png',
-      badge: 'Diseño Exclusivo',
-    },
-    {
-      name: 'Soportes',
-      icon: Headphones,
-      desc: 'Soportes gamer para auris, celulares, joysticks y notebooks.',
-      image: '/images/soportes.png',
-      badge: 'Ergonómicos',
-    },
-    {
-      name: 'Macetas',
-      icon: Flower2,
-      desc: 'Macetas Voronoi, autorregantes y geométricas para suculentas.',
-      image: '/images/macetas.png',
-      badge: 'Impermeables',
-    },
-    {
-      name: 'Regalos personalizados',
-      icon: Gift,
-      desc: 'Litofanías con luz LED, cuadros 3D con foto y placas de nombre.',
-      image: '/images/decoracion.png',
-      badge: 'Emotivos',
-    },
-    {
-      name: 'Figuras',
-      icon: Bot,
-      desc: 'Figuras coleccionables, personajes, mechas y piezas articuladas flexi.',
-      image: '/images/figuras.png',
-      badge: 'Máximo Detalle',
-    },
-    {
-      name: 'Diseño a medida',
-      icon: PenTool,
-      desc: 'Diseño personalizado de maquetas, repuestos y carcasas a medida.',
-      image: '/images/hero.png',
-      badge: 'Proyectos 3D',
-      featured: true,
-    },
-  ];
+const ICON_MAP: Record<string, LucideIcon> = {
+  llaveros: Key,
+  decoración: Sparkles,
+  decoracion: Sparkles,
+  soportes: Headphones,
+  macetas: Flower2,
+  'regalos personalizados': Gift,
+  figuras: Bot,
+  'diseño a medida': PenTool,
+  'diseno a medida': PenTool,
+};
+
+export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, categoriesList }) => {
+  const itemsToRender = categoriesList && categoriesList.length > 0 ? categoriesList : DEFAULT_CATEGORY_ITEMS;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -120,8 +83,12 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory }) => {
           viewport={{ once: true, margin: '-50px' }}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         >
-          {categoriesList.map((cat) => {
-            const Icon = cat.icon;
+          {itemsToRender.map((cat) => {
+            const Icon = ICON_MAP[cat.name.toLowerCase()] || Layers;
+            const badgeText = cat.badge || 'Impresión 3D';
+            const descText = cat.desc || 'Productos y artículos personalizados impresos en 3D.';
+            const imageSrc = cat.image || '/images/hero.png';
+
             return (
               <motion.div
                 key={cat.name}
@@ -140,38 +107,36 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory }) => {
                 }`}
               >
                 {/* Background Image Accent */}
-                <div className="absolute top-0 right-0 w-36 h-36 opacity-10 group-hover:opacity-25 group-hover:scale-110 transition-all duration-500 pointer-events-none">
-                  <Image
-                    src={cat.image}
+                <div className="absolute top-0 right-0 w-36 h-36 opacity-15 group-hover:opacity-30 group-hover:scale-110 transition-all duration-500 pointer-events-none overflow-hidden rounded-bl-full">
+                  <img
+                    src={imageSrc}
                     alt={cat.name}
-                    width={144}
-                    height={144}
-                    className="object-cover rounded-bl-full"
+                    className="w-full h-full object-cover rounded-bl-full"
                   />
                 </div>
 
                 <div>
                   {/* Category Badge & Icon */}
-                  <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center justify-between mb-6 relative z-10">
                     <div className="p-3.5 rounded-2xl bg-brand-500/15 text-brand-500 border border-brand-500/30 group-hover:bg-brand-500 group-hover:text-white transition-all duration-300 shadow-md">
                       <Icon className="w-6 h-6" />
                     </div>
                     <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white/5 text-neutral-300 border border-white/10 backdrop-blur-md">
-                      {cat.badge}
+                      {badgeText}
                     </span>
                   </div>
 
                   {/* Title & Description */}
-                  <h3 className="text-xl font-bold text-white group-hover:text-brand-400 transition-colors flex items-center gap-1.5">
+                  <h3 className="text-xl font-bold text-white group-hover:text-brand-400 transition-colors flex items-center gap-1.5 relative z-10">
                     {cat.name}
                   </h3>
-                  <p className="mt-2.5 text-sm text-neutral-400 font-light leading-relaxed">
-                    {cat.desc}
+                  <p className="mt-2.5 text-sm text-neutral-400 font-light leading-relaxed relative z-10">
+                    {descText}
                   </p>
                 </div>
 
                 {/* Bottom Action Arrow */}
-                <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-bold text-neutral-400 group-hover:text-brand-400 transition-colors">
+                <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-bold text-neutral-400 group-hover:text-brand-400 transition-colors relative z-10">
                   <span>Explorar productos</span>
                   <div className="p-1.5 rounded-full bg-white/5 group-hover:bg-brand-500 group-hover:text-white transition-all duration-300 shadow-md">
                     <ArrowUpRight className="w-4 h-4" />
@@ -185,4 +150,3 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory }) => {
     </section>
   );
 };
-

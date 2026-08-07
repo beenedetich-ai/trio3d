@@ -30,8 +30,15 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT ARRAY
 -- 2. TABLA DE CATEGORÍAS
 CREATE TABLE IF NOT EXISTS public.categories (
   name TEXT PRIMARY KEY,
+  badge TEXT,
+  description TEXT,
+  image TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS badge TEXT;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS image TEXT;
 
 -- 3. TABLA DE SUBCATEGORÍAS
 CREATE TABLE IF NOT EXISTS public.subcategories (
