@@ -38,22 +38,35 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
         ? productsList
         : productsList.filter((p) => p.category === selectedCategory);
 
-    const subcats = categoryProducts
-      .map((p) => p.subcategory)
-      .filter((s): s is string => Boolean(s && s.trim()));
+    const subcatsSet = new Set<string>();
+    categoryProducts.forEach((p) => {
+      if (Array.isArray(p.subcategories) && p.subcategories.length > 0) {
+        p.subcategories.forEach((s) => subcatsSet.add(s.trim()));
+      } else if (p.subcategory) {
+        p.subcategory.split(',').forEach((s) => {
+          if (s.trim()) subcatsSet.add(s.trim());
+        });
+      }
+    });
 
-    return Array.from(new Set(subcats));
+    return Array.from(subcatsSet);
   }, [productsList, selectedCategory]);
 
   const filteredProducts = productsList.filter((product) => {
     const matchesCategory =
       selectedCategory === 'Todos' || product.category === selectedCategory;
+    
+    const prodSubcats = Array.isArray(product.subcategories) && product.subcategories.length > 0
+      ? product.subcategories
+      : (product.subcategory ? product.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
+
     const matchesSubcategory =
-      selectedSubcategory === 'Todas' || product.subcategory === selectedSubcategory;
+      selectedSubcategory === 'Todas' || prodSubcats.includes(selectedSubcategory);
+
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.subcategory && product.subcategory.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      prodSubcats.some((sub) => sub.toLowerCase().includes(searchTerm.toLowerCase())) ||
       product.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return matchesCategory && matchesSubcategory && matchesSearch;
@@ -152,9 +165,13 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
             {availableSubcategories.map((sub) => {
               const active = selectedSubcategory === sub;
-              const count = productsList.filter(
-                (p) => (selectedCategory === 'Todos' || p.category === selectedCategory) && p.subcategory === sub
-              ).length;
+              const count = productsList.filter((p) => {
+                const catMatch = selectedCategory === 'Todos' || p.category === selectedCategory;
+                const pSubcats = Array.isArray(p.subcategories) && p.subcategories.length > 0
+                  ? p.subcategories
+                  : (p.subcategory ? p.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
+                return catMatch && pSubcats.includes(sub);
+              }).length;
 
               return (
                 <button

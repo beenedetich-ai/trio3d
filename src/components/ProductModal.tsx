@@ -145,11 +145,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, on
         {/* Right: Product Details & Customization */}
         <div className="md:w-1/2 p-6 sm:p-8 flex flex-col justify-between">
           <div>
-            {/* Category, Weight & Dimensions Pills */}
+            {/* Category, Subcategories, Weight & Dimensions Pills */}
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/30">
                 {product.category}
               </span>
+              {(() => {
+                const modalSubcats = Array.isArray(product.subcategories) && product.subcategories.length > 0
+                  ? product.subcategories
+                  : (product.subcategory ? product.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
+                return modalSubcats.map((sub) => (
+                  <span
+                    key={sub}
+                    className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-pink-500/15 text-pink-300 border border-pink-500/30 shadow-sm"
+                  >
+                    {sub}
+                  </span>
+                ));
+              })()}
               <span className="text-xs text-amber-300 font-mono font-semibold flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
                 <Scale className="w-3 h-3 text-amber-400" />
                 Peso: {product.peso && product.peso < 5 ? product.peso * 1000 : (product.peso || 200)} g

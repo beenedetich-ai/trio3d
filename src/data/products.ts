@@ -3,6 +3,7 @@ export interface Product {
   name: string;
   category: 'Llaveros' | 'Decoración' | 'Soportes' | 'Macetas' | 'Regalos personalizados' | 'Figuras' | 'Diseño a medida' | string;
   subcategory?: string;
+  subcategories?: string[];
   description: string;
   price: string;
   isPopular?: boolean;

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   name TEXT NOT NULL,
   category TEXT NOT NULL,
   subcategory TEXT,
+  subcategories TEXT[] DEFAULT ARRAY[]::TEXT[],
   description TEXT,
   price TEXT NOT NULL,
   is_popular BOOLEAN DEFAULT false,
@@ -24,8 +25,9 @@ CREATE TABLE IF NOT EXISTS public.products (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Si la tabla ya existe, aseguramos que la columna 'images' exista:
+-- Si la tabla ya existe, aseguramos que la columna 'images' y 'subcategories' existan:
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS subcategories TEXT[] DEFAULT ARRAY[]::TEXT[];
 
 -- 2. TABLA DE CATEGORÍAS
 CREATE TABLE IF NOT EXISTS public.categories (

@@ -49,6 +49,7 @@ export function useProductStore() {
                 name: p.name,
                 category: p.category,
                 subcategory: p.subcategory || null,
+                subcategories: p.subcategories || (p.subcategory ? p.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []),
                 description: p.description,
                 price: p.price,
                 is_popular: p.isPopular ?? false,
@@ -64,9 +65,9 @@ export function useProductStore() {
               }));
 
               const { error: seedError } = await supabase.from('products').insert(dbRows);
-              if (seedError && (seedError.message?.includes('images') || seedError.details?.includes('images'))) {
-                // Fallback insert without images column if column is not created in Supabase yet
-                const fallbackRows = dbRows.map(({ images, ...rest }) => rest);
+              if (seedError && (seedError.message?.includes('images') || seedError.message?.includes('subcategories'))) {
+                // Fallback insert without extra columns if column is not created in Supabase yet
+                const fallbackRows = dbRows.map(({ images, subcategories, ...rest }) => rest);
                 await supabase.from('products').insert(fallbackRows);
               }
               localStorage.setItem(HAS_SEEDED_KEY, 'true');
@@ -85,11 +86,15 @@ export function useProductStore() {
                 const rawImages = (Array.isArray(item.images) && item.images.length > 0)
                   ? item.images
                   : (localImagesMap[item.id] || [item.image || '/images/soportes.png']);
+                const rawSubcats = Array.isArray(item.subcategories) && item.subcategories.length > 0
+                  ? item.subcategories
+                  : (item.subcategory ? item.subcategory.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
                 return {
                   id: item.id,
                   name: item.name,
                   category: item.category,
-                  subcategory: item.subcategory || '',
+                  subcategory: item.subcategory || rawSubcats.join(', '),
+                  subcategories: rawSubcats,
                   description: item.description || '',
                   price: item.price || '0',
                   isPopular: item.is_popular ?? false,
@@ -177,10 +182,16 @@ export function useProductStore() {
     const rawImages = newProductData.images && newProductData.images.length > 0
       ? newProductData.images.slice(0, 5)
       : [newProductData.image || '/images/soportes.png'];
+    const rawSubcats = newProductData.subcategories && newProductData.subcategories.length > 0
+      ? newProductData.subcategories
+      : (newProductData.subcategory ? newProductData.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
+
     const newProduct: Product = {
       ...newProductData,
       image: rawImages[0],
       images: rawImages,
+      subcategory: rawSubcats.join(', '),
+      subcategories: rawSubcats,
       id,
     };
 
@@ -194,6 +205,7 @@ export function useProductStore() {
           name: newProduct.name,
           category: newProduct.category,
           subcategory: newProduct.subcategory || null,
+          subcategories: newProduct.subcategories,
           description: newProduct.description,
           price: newProduct.price,
           is_popular: newProduct.isPopular ?? false,
@@ -211,8 +223,8 @@ export function useProductStore() {
         const { error } = await supabase.from('products').insert([payload]);
         if (error) {
           console.error('Error inserting product into Supabase:', error);
-          if (error.message?.includes('images') || error.details?.includes('images')) {
-            const { images, ...fallbackPayload } = payload;
+          if (error.message?.includes('images') || error.message?.includes('subcategories')) {
+            const { images, subcategories, ...fallbackPayload } = payload;
             await supabase.from('products').insert([fallbackPayload]);
           }
         }
@@ -230,7 +242,19 @@ export function useProductStore() {
           ? updatedData.images
           : (updatedData.image ? [updatedData.image] : (p.images || [p.image]));
         const mainImage = mergedImages[0] || updatedData.image || p.image;
-        return { ...p, ...updatedData, image: mainImage, images: mergedImages };
+        const mergedSubcats = updatedData.subcategories !== undefined
+          ? updatedData.subcategories
+          : (updatedData.subcategory ? updatedData.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : (p.subcategories || []));
+        const subcategoryStr = mergedSubcats.join(', ') || updatedData.subcategory || p.subcategory || '';
+
+        return {
+          ...p,
+          ...updatedData,
+          image: mainImage,
+          images: mergedImages,
+          subcategory: subcategoryStr,
+          subcategories: mergedSubcats,
+        };
       }
       return p;
     });
@@ -241,7 +265,12 @@ export function useProductStore() {
         const dbPayload: any = {};
         if (updatedData.name !== undefined) dbPayload.name = updatedData.name;
         if (updatedData.category !== undefined) dbPayload.category = updatedData.category;
-        if (updatedData.subcategory !== undefined) dbPayload.subcategory = updatedData.subcategory;
+        if (updatedData.subcategories !== undefined) {
+          dbPayload.subcategories = updatedData.subcategories;
+          dbPayload.subcategory = updatedData.subcategories.join(', ');
+        } else if (updatedData.subcategory !== undefined) {
+          dbPayload.subcategory = updatedData.subcategory;
+        }
         if (updatedData.description !== undefined) dbPayload.description = updatedData.description;
         if (updatedData.price !== undefined) dbPayload.price = updatedData.price;
         if (updatedData.isPopular !== undefined) dbPayload.is_popular = updatedData.isPopular;
@@ -262,8 +291,8 @@ export function useProductStore() {
         const { error } = await supabase.from('products').update(dbPayload).eq('id', id);
         if (error) {
           console.error('Error updating product in Supabase:', error);
-          if (error.message?.includes('images') || error.details?.includes('images')) {
-            const { images, ...fallbackPayload } = dbPayload;
+          if (error.message?.includes('images') || error.message?.includes('subcategories')) {
+            const { images, subcategories, ...fallbackPayload } = dbPayload;
             await supabase.from('products').update(fallbackPayload).eq('id', id);
           }
         }

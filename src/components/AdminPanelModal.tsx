@@ -66,6 +66,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Product['category']>('Llaveros');
   const [subcategory, setSubcategory] = useState('');
+  const [subcategories, setSubcategories] = useState<string[]>([]);
+  const [customSubcatInput, setCustomSubcatInput] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [images, setImages] = useState<string[]>(['/images/soportes.png']);
@@ -275,6 +277,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setName('');
     setCategory('Llaveros');
     setSubcategory('');
+    setSubcategories([]);
+    setCustomSubcatInput('');
     setDescription('');
     setPrice('');
     setImages(['/images/soportes.png']);
@@ -294,6 +298,11 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setName(product.name);
     setCategory(product.category);
     setSubcategory(product.subcategory || '');
+    const prodSubcats = Array.isArray(product.subcategories) && product.subcategories.length > 0
+      ? product.subcategories
+      : (product.subcategory ? product.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
+    setSubcategories(prodSubcats);
+    setCustomSubcatInput('');
     setDescription(product.description);
     setPrice(product.price);
     const prodImages = Array.isArray(product.images) && product.images.length > 0
@@ -335,11 +344,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     const numLargo = Math.max(1, parseFloat(String(largo)) || 10);
 
     const finalImages = images.length > 0 ? images.slice(0, 5) : ['/images/soportes.png'];
+    const finalSubcategories = subcategories.length > 0
+      ? subcategories
+      : (subcategory.trim() ? subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
 
     const productPayload = {
       name,
       category,
-      subcategory: subcategory.trim() || undefined,
+      subcategory: finalSubcategories.join(', ') || undefined,
+      subcategories: finalSubcategories,
       description,
       price,
       image: finalImages[0],
@@ -565,37 +578,106 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         </select>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5">
-                          Subcategoría (Seleccionar o crear)
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                          <span>Subcategorías Compatibles (Podés elegir varias a la vez)</span>
+                          <span className="text-[10px] text-brand-400 font-semibold">{subcategories.length} seleccionada(s)</span>
                         </label>
-                        <div className="space-y-2">
-                          <select
-                            value={activeSubcategoriesForCategory.includes(subcategory) ? subcategory : subcategory ? 'custom' : ''}
-                            onChange={(e) => {
-                              if (e.target.value !== 'custom') {
-                                setSubcategory(e.target.value);
-                              }
-                            }}
-                            className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                          >
-                            <option value="">-- Seleccionar Subcategoría --</option>
-                            {activeSubcategoriesForCategory.map((sub) => (
-                              <option key={sub} value={sub}>
-                                {sub}
-                              </option>
-                            ))}
-                            <option value="custom">✏️ Escribir nueva subcategoría...</option>
-                          </select>
+                        
+                        {/* Interactive Pill Buttons for Active Subcategories */}
+                        <div className="p-3.5 rounded-2xl bg-neutral-900 border border-white/10 space-y-3">
+                          {activeSubcategoriesForCategory.length > 0 && (
+                            <div>
+                              <span className="text-[10px] font-bold text-neutral-400 block mb-1.5 uppercase tracking-wider">
+                                Subcategorías disponibles en {category}:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {activeSubcategoriesForCategory.map((sub) => {
+                                  const isSelected = subcategories.includes(sub);
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={sub}
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          setSubcategories(subcategories.filter((s) => s !== sub));
+                                        } else {
+                                          setSubcategories([...subcategories, sub]);
+                                        }
+                                      }}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1 cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white border-pink-400 shadow-md shadow-pink-500/20'
+                                          : 'bg-white/5 text-neutral-300 border-white/10 hover:border-white/30 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <span>{isSelected ? '✓' : '+'}</span>
+                                      <span>{sub}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
 
-                          {(!activeSubcategoriesForCategory.includes(subcategory) || subcategory === '') && (
+                          {/* Quick Custom Subcategory Input */}
+                          <div className="flex gap-2 pt-1">
                             <input
                               type="text"
-                              placeholder="O escribí una nueva subcategoría..."
-                              value={subcategory}
-                              onChange={(e) => setSubcategory(e.target.value)}
-                              className="w-full bg-white/[0.04] border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
+                              placeholder="Escribí otra subcategoría (ej: PS5, Xbox, Pro...)"
+                              value={customSubcatInput}
+                              onChange={(e) => setCustomSubcatInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (customSubcatInput.trim() && !subcategories.includes(customSubcatInput.trim())) {
+                                    setSubcategories([...subcategories, customSubcatInput.trim()]);
+                                    setCustomSubcatInput('');
+                                  }
+                                }
+                              }}
+                              className="flex-1 bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
                             />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (customSubcatInput.trim() && !subcategories.includes(customSubcatInput.trim())) {
+                                  setSubcategories([...subcategories, customSubcatInput.trim()]);
+                                  setCustomSubcatInput('');
+                                }
+                              }}
+                              disabled={!customSubcatInput.trim()}
+                              className="px-3.5 py-2 rounded-xl bg-brand-500/20 text-brand-400 hover:bg-brand-500 hover:text-white disabled:opacity-40 text-xs font-bold transition-colors border border-brand-500/30 whitespace-nowrap"
+                            >
+                              + Añadir
+                            </button>
+                          </div>
+
+                          {/* Active Selected Subcategories Pills */}
+                          {subcategories.length > 0 && (
+                            <div className="pt-2 border-t border-white/10">
+                              <span className="text-[10px] font-bold text-neutral-400 block mb-1.5 uppercase tracking-wider">
+                                Asignadas al producto:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {subcategories.map((sub) => (
+                                  <span
+                                    key={sub}
+                                    className="px-2.5 py-1 rounded-lg bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold flex items-center gap-1.5"
+                                  >
+                                    <span>{sub}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSubcategories(subcategories.filter((s) => s !== sub))}
+                                      className="hover:text-white text-pink-400 transition-colors"
+                                      title="Quitar subcategoría"
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
