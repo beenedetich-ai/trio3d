@@ -7,7 +7,7 @@
  */
 
 import { MeliPublicationItem } from '@/services/mercadoLibreService';
-import { ProductVariant } from '@/data/products';
+import { Product, ProductVariant } from '@/data/products';
 
 export interface MeliPricingConfig {
   /** % de comisión cobrada por Mercado Libre en publicaciones Clásicas (def: 14%) */
@@ -95,6 +95,10 @@ export interface ConsolidatedMeliProduct {
   description: string;
   /** Permalink a la publicación base de ML */
   permalink?: string;
+  /** Indizador que indica si el producto ya existe publicado en la tienda web */
+  isAlreadyPublished?: boolean;
+  /** Producto correspondiente en el catálogo de la tienda web si ya fue publicado */
+  existingStoreProduct?: Product | null;
 }
 
 /**
@@ -325,12 +329,45 @@ export function normalizeTitleForGrouping(title: string): string {
 }
 
 /**
+ * Busca si una publicación o grupo de publicaciones de ML ya existe en el catálogo de la tienda web
+ */
+export function findMatchingStoreProduct(
+  itemIds: string[],
+  cleanTitle: string,
+  existingProducts: Product[] = []
+): Product | null {
+  if (!existingProducts || existingProducts.length === 0) return null;
+
+  // 1. Coincidencia primaria por meli_id o meli_ids
+  const matchById = existingProducts.find((p) => {
+    if (p.meli_id && itemIds.includes(p.meli_id)) return true;
+    if (p.meli_ids && p.meli_ids.some((id) => itemIds.includes(id))) return true;
+    return false;
+  });
+
+  if (matchById) return matchById;
+
+  // 2. Coincidencia secundaria por nombre normalizado
+  const normTitle = normalizeTitleForGrouping(cleanTitle);
+  if (normTitle.length < 4) return null;
+
+  const matchByName = existingProducts.find((p) => {
+    const normStoreName = normalizeTitleForGrouping(p.name);
+    return normStoreName === normTitle || (normStoreName.length > 5 && normTitle.includes(normStoreName));
+  });
+
+  return matchByName || null;
+}
+
+/**
  * Agrupa publicaciones de Mercado Libre duplicadas o con variantes (ej: Clásica vs Premium)
  * y calcula el precio neto limpio tomando como base la publicación de MENOR PRECIO.
+ * Además, verifica contra el catálogo existente de la tienda web para señalar [NUEVO] o [YA PUBLICADO].
  */
 export function groupAndDeduplicateMeliPublications(
   items: MeliPublicationItem[],
-  customConfig: Partial<MeliPricingConfig> = {}
+  customConfig: Partial<MeliPricingConfig> = {},
+  existingProducts: Product[] = []
 ): ConsolidatedMeliProduct[] {
   if (!items || items.length === 0) return [];
 
@@ -347,6 +384,7 @@ export function groupAndDeduplicateMeliPublications(
       );
       const cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(item.title) : item.title;
       const cleanDesc = config.sanitizeDescription ? sanitizeMeliDescription(item.description || '', cleanTitle) : item.description || '';
+      const existingMatch = findMatchingStoreProduct([item.id], cleanTitle, existingProducts);
 
       return {
         id: item.id,
@@ -362,6 +400,8 @@ export function groupAndDeduplicateMeliPublications(
         variants: [],
         description: cleanDesc,
         permalink: item.permalink,
+        isAlreadyPublished: Boolean(existingMatch),
+        existingStoreProduct: existingMatch || null,
       };
     });
   }
@@ -443,6 +483,10 @@ export function groupAndDeduplicateMeliPublications(
     const rawDesc = lowestItem.description || groupItems.find((i) => i.description)?.description || '';
     const cleanDesc = config.sanitizeDescription ? sanitizeMeliDescription(rawDesc, cleanTitle) : rawDesc;
 
+    // G. Verificar si ya existe en el catálogo web
+    const meliIds = groupItems.map((i) => i.id);
+    const existingMatch = findMatchingStoreProduct(meliIds, cleanTitle, existingProducts);
+
     consolidatedList.push({
       id: lowestItem.id,
       title: cleanTitle,
@@ -453,10 +497,12 @@ export function groupAndDeduplicateMeliPublications(
       cleanPriceResult,
       pictures: combinedPictures.length > 0 ? combinedPictures : [{ url: lowestItem.thumbnail }],
       groupedItems: groupItems,
-      meli_ids: groupItems.map((i) => i.id),
+      meli_ids: meliIds,
       variants,
       description: cleanDesc,
       permalink: lowestItem.permalink,
+      isAlreadyPublished: Boolean(existingMatch),
+      existingStoreProduct: existingMatch || null,
     });
   });
 

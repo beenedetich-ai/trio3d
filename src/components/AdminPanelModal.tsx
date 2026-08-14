@@ -127,6 +127,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   // Filters & Pricing Recalculation state
   const [filterQuery, setFilterQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPublishedStatus, setFilterPublishedStatus] = useState<'all' | 'new_only' | 'published_only'>('all');
   const [discountPercent, setDiscountPercent] = useState<number>(15);
   const [isImportingMeli, setIsImportingMeli] = useState(false);
   const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(DEFAULT_MELI_PRICING_CONFIG);
@@ -166,10 +167,16 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
 
   const handleToggleSelectAllMeli = () => {
-    if (selectedMeliItemIds.length === meliPublications.length) {
+    const consolidatedList = groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products);
+    // Priorizar seleccionar solo los productos NUEVOS si existen
+    const newItems = consolidatedList.filter((item) => !item.isAlreadyPublished);
+    const targetItems = newItems.length > 0 ? newItems : consolidatedList;
+    const targetIds = targetItems.flatMap((item) => item.meli_ids);
+
+    if (selectedMeliItemIds.length >= targetIds.length && targetIds.every((id) => selectedMeliItemIds.includes(id))) {
       setSelectedMeliItemIds([]);
     } else {
-      setSelectedMeliItemIds(meliPublications.map((item) => item.id));
+      setSelectedMeliItemIds(targetIds);
     }
   };
 
@@ -189,8 +196,8 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     let count = 0;
 
     try {
-      // 1. Agrupar y consolidar publicaciones según configuración
-      const consolidatedList = groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig);
+      // 1. Agrupar y consolidar publicaciones según configuración y verificar contra catálogo web
+      const consolidatedList = groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products);
 
       // 2. Filtrar los productos consolidados seleccionados
       const selectedConsolidated = consolidatedList.filter((item) =>
@@ -1884,7 +1891,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         {/* Search Query */}
                         <div className="sm:col-span-2">
                           <label className="block text-[11px] font-bold text-neutral-400 mb-1">Buscar por Título / Nombre</label>
@@ -1902,7 +1909,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                         {/* Publication Status */}
                         <div>
-                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado de Publicación</label>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado en Mercado Libre</label>
                           <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
@@ -1912,6 +1919,20 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                             <option value="active">🟢 Activas (active)</option>
                             <option value="paused">🟡 Pausadas (paused)</option>
                             <option value="closed">🔴 Cerradas (closed)</option>
+                          </select>
+                        </div>
+
+                        {/* Web Catalog Status */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado en Mi Web</label>
+                          <select
+                            value={filterPublishedStatus}
+                            onChange={(e) => setFilterPublishedStatus(e.target.value as any)}
+                            className="w-full bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="all">Ver Todos</option>
+                            <option value="new_only">✨ Solo Artículos NUEVOS</option>
+                            <option value="published_only">🟢 Solo YA PUBLICADOS</option>
                           </select>
                         </div>
                       </div>
@@ -2138,7 +2159,13 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                     {meliPublications.length > 0 && !isSearchingMeliPubs && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig).map((consolidated) => {
+                        {groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products)
+                          .filter((item) => {
+                            if (filterPublishedStatus === 'new_only') return !item.isAlreadyPublished;
+                            if (filterPublishedStatus === 'published_only') return item.isAlreadyPublished;
+                            return true;
+                          })
+                          .map((consolidated) => {
                           const isSelected = consolidated.meli_ids.some((id) => selectedMeliItemIds.includes(id));
                           const priceResult = consolidated.cleanPriceResult;
                           const groupCount = consolidated.groupedItems.length;
@@ -2158,11 +2185,13 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                               className={`relative p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                                 isSelected
                                   ? 'bg-neutral-900 border-amber-500 shadow-lg shadow-amber-500/10'
+                                  : consolidated.isAlreadyPublished
+                                  ? 'bg-neutral-900/40 border-emerald-500/30'
                                   : 'bg-neutral-900/60 border-white/10 hover:border-white/30'
                               }`}
                             >
                               <div>
-                                {/* Top Row: Checkbox, ID, Group Badge & Status */}
+                                {/* Top Row: Checkbox, ID, Status Badges & Web Status */}
                                 <div className="flex items-center justify-between mb-3">
                                   <div className="flex items-center gap-2">
                                     <input
@@ -2178,15 +2207,24 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   </div>
 
                                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                                    {groupCount > 1 && (
-                                      <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                        📦 {groupCount} publicaciones unificadas
+                                    {consolidated.isAlreadyPublished ? (
+                                      <span
+                                        className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1"
+                                        title={`Ya publicado en tu web como: ${consolidated.existingStoreProduct?.name || 'Producto Existente'}`}
+                                      >
+                                        🟢 YA PUBLICADO
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20 flex items-center gap-1">
+                                        ✨ NUEVO
                                       </span>
                                     )}
 
-                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                      {priceResult.listingType}
-                                    </span>
+                                    {groupCount > 1 && (
+                                      <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                        📦 {groupCount} unificadas
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
 
@@ -2206,6 +2244,11 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                     <h5 className="text-xs font-extrabold text-white line-clamp-2 leading-snug">
                                       {consolidated.title}
                                     </h5>
+                                    {consolidated.isAlreadyPublished && consolidated.existingStoreProduct && (
+                                      <p className="text-[10px] text-emerald-400 font-semibold truncate mt-1">
+                                        ✓ En Tienda: {consolidated.existingStoreProduct.name}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
 
