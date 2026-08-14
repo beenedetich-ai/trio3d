@@ -128,6 +128,8 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const [filterQuery, setFilterQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPublishedStatus, setFilterPublishedStatus] = useState<'all' | 'new_only' | 'published_only'>('all');
+  const [targetWebCategory, setTargetWebCategory] = useState<string>('auto');
+  const [itemTargetCategories, setItemTargetCategories] = useState<Record<string, string>>({});
   const [discountPercent, setDiscountPercent] = useState<number>(15);
   const [isImportingMeli, setIsImportingMeli] = useState(false);
   const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(DEFAULT_MELI_PRICING_CONFIG);
@@ -205,9 +207,15 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
       );
 
       for (const item of selectedConsolidated) {
-        const catName = item.category_name || 'General';
+        // A. Determinar la categoría web a asignar (override individual > global > categoría ML)
+        const customItemCat = itemTargetCategories[item.id];
+        const catName = customItemCat && customItemCat !== 'auto'
+          ? customItemCat
+          : targetWebCategory !== 'auto'
+          ? targetWebCategory
+          : item.category_name || 'General';
 
-        // A. Crear categoría si no existe
+        // B. Crear categoría en la tienda si no existe
         if (onAddCategory) {
           await onAddCategory({
             name: catName,
@@ -1891,9 +1899,9 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         {/* Search Query */}
-                        <div className="sm:col-span-2">
+                        <div>
                           <label className="block text-[11px] font-bold text-neutral-400 mb-1">Buscar por Título / Nombre</label>
                           <div className="relative">
                             <input
@@ -1933,6 +1941,23 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                             <option value="all">Ver Todos</option>
                             <option value="new_only">✨ Solo Artículos NUEVOS</option>
                             <option value="published_only">🟢 Solo YA PUBLICADOS</option>
+                          </select>
+                        </div>
+
+                        {/* Global Web Target Category */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">📁 Categoría Destino Web (Global)</label>
+                          <select
+                            value={targetWebCategory}
+                            onChange={(e) => setTargetWebCategory(e.target.value)}
+                            className="w-full bg-neutral-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                          >
+                            <option value="auto">Auto (Categoría ML)</option>
+                            {categories.filter((c) => c !== 'Todos').map((c) => (
+                              <option key={c} value={c}>
+                                📍 {c}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -2250,6 +2275,23 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                       </p>
                                     )}
                                   </div>
+                                </div>
+
+                                {/* Individual Target Category Selector */}
+                                <div className="mb-3 pt-2 border-t border-white/5 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                                  <span className="text-[10px] text-neutral-400 font-bold shrink-0">📁 Pestaña Web:</span>
+                                  <select
+                                    value={itemTargetCategories[consolidated.id] || targetWebCategory}
+                                    onChange={(e) => setItemTargetCategories({ ...itemTargetCategories, [consolidated.id]: e.target.value })}
+                                    className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none focus:border-amber-400 truncate max-w-[170px]"
+                                  >
+                                    <option value="auto">Auto ({consolidated.category_name || 'ML'})</option>
+                                    {categories.filter((c) => c !== 'Todos').map((c) => (
+                                      <option key={c} value={c}>
+                                        📍 {c}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
 
                                 {/* Variants chips */}
