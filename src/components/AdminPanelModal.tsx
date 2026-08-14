@@ -12,6 +12,8 @@ import {
   calculateCleanPrice,
   sanitizeMeliTitle,
   sanitizeMeliDescription,
+  groupAndDeduplicateMeliPublications,
+  ConsolidatedMeliProduct,
   MeliPricingConfig,
   DEFAULT_MELI_PRICING_CONFIG,
 } from '@/utils/meliSanitizer';
@@ -187,58 +189,53 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     let count = 0;
 
     try {
-      const selectedItems = meliPublications.filter((p) => selectedMeliItemIds.includes(p.id));
+      // 1. Agrupar y consolidar publicaciones según configuración
+      const consolidatedList = groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig);
 
-      for (const item of selectedItems) {
+      // 2. Filtrar los productos consolidados seleccionados
+      const selectedConsolidated = consolidatedList.filter((item) =>
+        item.meli_ids.some((id) => selectedMeliItemIds.includes(id)) || selectedMeliItemIds.includes(item.id)
+      );
+
+      for (const item of selectedConsolidated) {
         const catName = item.category_name || 'General';
 
-        // 1. Crear categoría si no existe aún
+        // A. Crear categoría si no existe
         if (onAddCategory) {
           await onAddCategory({
             name: catName,
             badge: 'Tienda Oficial',
             desc: 'Categoría sincronizada desde Mercado Libre',
-            image: item.pictures[0]?.url || item.thumbnail || '/images/hero.png',
+            image: item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/hero.png',
           });
         }
 
-        // 2. Recalcular precio limpio sin comisiones ni recargos de ML
-        const priceResult = calculateCleanPrice(
-          item.price,
-          item.listing_type_id || 'gold_special',
-          Boolean(item.free_shipping),
-          meliPricingConfig
-        );
-
-        // 3. Sanitizar Título y Descripción (eliminar marcas ML, cuotas, envíos gratis y adaptar a tienda oficial)
-        const cleanedTitle = meliPricingConfig.sanitizeTitle ? sanitizeMeliTitle(item.title) : item.title;
-        const rawDesc = item.description || `Producto oficial de diseño e impresión 3D - ${item.title}`;
-        const cleanedDesc = meliPricingConfig.sanitizeDescription ? sanitizeMeliDescription(rawDesc, cleanedTitle) : rawDesc;
-
-        const mainImg = item.pictures[0]?.url || item.thumbnail || '/images/soportes.png';
+        const mainImg = item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/soportes.png';
         const allImages = item.pictures.map((p) => p.url).filter(Boolean);
 
-        // 4. Crear producto en Supabase con meli_id, precio limpio y contenido sanitizado
+        // B. Crear producto consolidado en Supabase con variantes y precio basado en el menor costo
         await onAddProduct({
-          name: cleanedTitle,
+          name: item.title,
           category: catName,
-          description: cleanedDesc,
-          price: priceResult.formattedPrice,
+          description: item.description,
+          price: item.cleanPriceResult.formattedPrice,
           image: mainImg,
           images: allImages.length > 0 ? allImages : [mainImg],
           materials: ['PLA Premium', 'PETG High Detail'],
-          tags: ['Tienda Oficial', '3D', 'Limpio'],
+          tags: ['Tienda Oficial', '3D', 'Consolidado'],
           peso: 200,
           alto: 10,
           ancho: 10,
           largo: 10,
           meli_id: item.id,
+          meli_ids: item.meli_ids,
+          variants: item.variants,
         });
 
         count++;
       }
 
-      setNotification(`¡Se importaron exitosamente ${count} productos con precio neto limpio y contenido sanitizado!`);
+      setNotification(`¡Se importaron exitosamente ${count} productos consolidados (con variantes y precio limpio basado en menor costo base)!`);
       setTimeout(() => setNotification(null), 5000);
       setSelectedMeliItemIds([]);
     } catch (err: any) {
@@ -2081,6 +2078,24 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   Sanitizar descripciones al tono de Tienda Oficial (conservar specs)
                                 </span>
                               </label>
+
+                              <label className="flex items-center gap-2 cursor-pointer sm:col-span-2 pt-1 border-t border-white/5">
+                                <input
+                                  type="checkbox"
+                                  checked={meliPricingConfig.groupDuplicates}
+                                  onChange={(e) =>
+                                    setMeliPricingConfig({
+                                      ...meliPricingConfig,
+                                      groupDuplicates: e.target.checked,
+                                    })
+                                  }
+                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-neutral-900 border-white/20"
+                                />
+                                <span className="text-xs text-amber-300 font-extrabold flex items-center gap-1.5">
+                                  <PackageCheck className="w-4 h-4 text-amber-400" />
+                                  <span>📦 Consolidar publicaciones duplicadas y crear variantes automáticamente (Precio neto basado en menor costo)</span>
+                                </span>
+                              </label>
                             </div>
                           </div>
                         )}
@@ -2123,19 +2138,23 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                     {meliPublications.length > 0 && !isSearchingMeliPubs && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {meliPublications.map((pub) => {
-                          const isSelected = selectedMeliItemIds.includes(pub.id);
-                          const priceResult = calculateCleanPrice(
-                            pub.price,
-                            pub.listing_type_id || 'gold_special',
-                            Boolean(pub.free_shipping),
-                            meliPricingConfig
-                          );
+                        {groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig).map((consolidated) => {
+                          const isSelected = consolidated.meli_ids.some((id) => selectedMeliItemIds.includes(id));
+                          const priceResult = consolidated.cleanPriceResult;
+                          const groupCount = consolidated.groupedItems.length;
+
+                          const handleToggleConsolidatedSelect = () => {
+                            if (isSelected) {
+                              setSelectedMeliItemIds((prev) => prev.filter((id) => !consolidated.meli_ids.includes(id)));
+                            } else {
+                              setSelectedMeliItemIds((prev) => Array.from(new Set([...prev, ...consolidated.meli_ids])));
+                            }
+                          };
 
                           return (
                             <div
-                              key={pub.id}
-                              onClick={() => handleToggleSelectItem(pub.id)}
+                              key={consolidated.id}
+                              onClick={handleToggleConsolidatedSelect}
                               className={`relative p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                                 isSelected
                                   ? 'bg-neutral-900 border-amber-500 shadow-lg shadow-amber-500/10'
@@ -2143,40 +2162,30 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                               }`}
                             >
                               <div>
-                                {/* Top Row: Checkbox, ID, Status & Listing Type */}
+                                {/* Top Row: Checkbox, ID, Group Badge & Status */}
                                 <div className="flex items-center justify-between mb-3">
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="checkbox"
                                       checked={isSelected}
-                                      onChange={() => handleToggleSelectItem(pub.id)}
+                                      onChange={handleToggleConsolidatedSelect}
                                       onClick={(e) => e.stopPropagation()}
                                       className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-neutral-950 border-white/20"
                                     />
                                     <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-white/10">
-                                      {pub.id}
+                                      {consolidated.id}
                                     </span>
                                   </div>
 
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                      {priceResult.listingType}
-                                    </span>
-
-                                    {pub.free_shipping && (
-                                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Incluye envío gratis integrado">
-                                        Envío Gratis
+                                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                    {groupCount > 1 && (
+                                      <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                        📦 {groupCount} publicaciones unificadas
                                       </span>
                                     )}
 
-                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-                                      pub.status === 'active'
-                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                        : pub.status === 'paused'
-                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                        : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                                    }`}>
-                                      {pub.status === 'active' ? '🟢' : pub.status === 'paused' ? '🟡' : '🔴'}
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      {priceResult.listingType}
                                     </span>
                                   </div>
                                 </div>
@@ -2185,27 +2194,44 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                 <div className="flex items-start gap-3 mb-3">
                                   <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-neutral-950 flex-shrink-0 border border-white/10">
                                     <img
-                                      src={pub.pictures[0]?.url || pub.thumbnail}
-                                      alt={pub.title}
+                                      src={consolidated.pictures[0]?.url || consolidated.lowestPriceItem.thumbnail}
+                                      alt={consolidated.title}
                                       className="w-full h-full object-cover"
                                     />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 block truncate mb-1">
-                                      {pub.category_name || 'Mercado Libre'}
+                                      {consolidated.category_name || 'Mercado Libre'}
                                     </span>
                                     <h5 className="text-xs font-extrabold text-white line-clamp-2 leading-snug">
-                                      {meliPricingConfig.sanitizeTitle ? sanitizeMeliTitle(pub.title) : pub.title}
+                                      {consolidated.title}
                                     </h5>
                                   </div>
                                 </div>
+
+                                {/* Variants chips */}
+                                {consolidated.variants.length > 0 && (
+                                  <div className="mb-3 space-y-1">
+                                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Variantes consolidadas ({consolidated.variants.length}):</div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {consolidated.variants.slice(0, 4).map((v, i) => (
+                                        <span key={i} className="text-[9px] bg-neutral-950 text-neutral-300 px-1.5 py-0.5 rounded border border-white/10">
+                                          {v.name}: <strong className="text-amber-300">{v.value}</strong>
+                                        </span>
+                                      ))}
+                                      {consolidated.variants.length > 4 && (
+                                        <span className="text-[9px] text-amber-400 font-bold">+{consolidated.variants.length - 4} más</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Bottom Row: Price breakdown */}
                               <div className="pt-3 border-t border-white/10 flex items-center justify-between mt-2">
                                 <div>
                                   <div className="text-[10px] text-neutral-400 line-through">
-                                    ML original: ${pub.price.toLocaleString('es-AR')}
+                                    ML menor base: ${consolidated.lowestBasePrice.toLocaleString('es-AR')}
                                   </div>
                                   <div className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
                                     <span>Neto Limpio: {priceResult.formattedPrice}</span>
@@ -2217,14 +2243,14 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   </div>
                                 </div>
 
-                                {pub.permalink && (
+                                {consolidated.permalink && (
                                   <a
-                                    href={pub.permalink}
+                                    href={consolidated.permalink}
                                     target="_blank"
                                     rel="noreferrer"
                                     onClick={(e) => e.stopPropagation()}
                                     className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-amber-400 transition-colors"
-                                    title="Ver publicación en Mercado Libre"
+                                    title="Ver publicación base en Mercado Libre"
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </a>

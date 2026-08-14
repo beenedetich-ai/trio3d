@@ -1,10 +1,13 @@
 /**
- * Motor de Recálculo de Precios y Sanitización de Publicaciones de Mercado Libre
+ * Motor de Recálculo de Precios, Sanitización y Consolidación de Publicaciones de Mercado Libre
  * 
  * Permite eliminar comisiones de la plataforma (Clásica/Premium), recargos por cuotas/financiación,
  * costo de envío gratis integrado y referencias/marcas de Mercado Libre para adaptar los productos
  * a la tienda propia con precios limpios y tono oficial.
  */
+
+import { MeliPublicationItem } from '@/services/mercadoLibreService';
+import { ProductVariant } from '@/data/products';
 
 export interface MeliPricingConfig {
   /** % de comisión cobrada por Mercado Libre en publicaciones Clásicas (def: 14%) */
@@ -25,6 +28,8 @@ export interface MeliPricingConfig {
   sanitizeTitle: boolean;
   /** Si debe sanitizarse la descripción al tono de tienda oficial */
   sanitizeDescription: boolean;
+  /** Si debe agrupar/consolidar publicaciones duplicadas en variantes */
+  groupDuplicates: boolean;
 }
 
 export const DEFAULT_MELI_PRICING_CONFIG: MeliPricingConfig = {
@@ -37,6 +42,7 @@ export const DEFAULT_MELI_PRICING_CONFIG: MeliPricingConfig = {
   customDiscountPercent: 0,
   sanitizeTitle: true,
   sanitizeDescription: true,
+  groupDuplicates: true,
 };
 
 export interface CleanPriceResult {
@@ -60,6 +66,35 @@ export interface CleanPriceResult {
     buyerSurchargeDeduction: number;
     customDiscountDeduction: number;
   };
+}
+
+export interface ConsolidatedMeliProduct {
+  /** ID representativo único (ej: ID de la publicación principal) */
+  id: string;
+  /** Título sanitizado representativo */
+  title: string;
+  /** Categoría de Mercado Libre */
+  category_name: string;
+  /** Categoría ID */
+  category_id: string;
+  /** Precio base más bajo encontrado entre el grupo de publicaciones */
+  lowestBasePrice: number;
+  /** Publicación base de menor costo */
+  lowestPriceItem: MeliPublicationItem;
+  /** Resultado del cálculo de precio neto limpio sobre la publicación de menor costo */
+  cleanPriceResult: CleanPriceResult;
+  /** Colección de todas las fotos de las publicaciones del grupo sin duplicados */
+  pictures: Array<{ url: string }>;
+  /** Lista de publicaciones agrupadas */
+  groupedItems: MeliPublicationItem[];
+  /** IDs de las publicaciones de ML consolidadas */
+  meli_ids: string[];
+  /** Variantes generadas a partir de las diferencias entre las publicaciones */
+  variants: ProductVariant[];
+  /** Descripción consolidada sanitizada */
+  description: string;
+  /** Permalink a la publicación base de ML */
+  permalink?: string;
 }
 
 /**
@@ -272,4 +307,158 @@ export function sanitizeMeliDescription(rawDescription: string, productTitle?: s
   }
 
   return text;
+}
+
+/**
+ * Normaliza el título de una publicación para agrupar ítems idénticos
+ */
+export function normalizeTitleForGrouping(title: string): string {
+  if (!title) return '';
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(clasica|premium|cuotas?|sin|interes|envio|gratis|oferta|promo|pack|combo|descuento)\b/gi, '')
+    .replace(/[^a-z0-9]/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Agrupa publicaciones de Mercado Libre duplicadas o con variantes (ej: Clásica vs Premium)
+ * y calcula el precio neto limpio tomando como base la publicación de MENOR PRECIO.
+ */
+export function groupAndDeduplicateMeliPublications(
+  items: MeliPublicationItem[],
+  customConfig: Partial<MeliPricingConfig> = {}
+): ConsolidatedMeliProduct[] {
+  if (!items || items.length === 0) return [];
+
+  const config = { ...DEFAULT_MELI_PRICING_CONFIG, ...customConfig };
+
+  if (!config.groupDuplicates) {
+    // Si la consolidación está desactivada, cada publicación se procesa individualmente
+    return items.map((item) => {
+      const cleanPriceResult = calculateCleanPrice(
+        item.price,
+        item.listing_type_id || 'gold_special',
+        Boolean(item.free_shipping),
+        config
+      );
+      const cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(item.title) : item.title;
+      const cleanDesc = config.sanitizeDescription ? sanitizeMeliDescription(item.description || '', cleanTitle) : item.description || '';
+
+      return {
+        id: item.id,
+        title: cleanTitle,
+        category_name: item.category_name || 'Mercado Libre',
+        category_id: item.category_id,
+        lowestBasePrice: item.price,
+        lowestPriceItem: item,
+        cleanPriceResult,
+        pictures: item.pictures.map((p) => ({ url: p.url })),
+        groupedItems: [item],
+        meli_ids: [item.id],
+        variants: [],
+        description: cleanDesc,
+        permalink: item.permalink,
+      };
+    });
+  }
+
+  const groupsMap = new Map<string, MeliPublicationItem[]>();
+
+  // 1. Agrupar publicaciones por título normalizado
+  for (const item of items) {
+    const normKey = normalizeTitleForGrouping(item.title);
+    const key = normKey.length >= 4 ? normKey : item.id;
+
+    if (!groupsMap.has(key)) {
+      groupsMap.set(key, []);
+    }
+    groupsMap.get(key)!.push(item);
+  }
+
+  const consolidatedList: ConsolidatedMeliProduct[] = [];
+
+  // 2. Procesar cada grupo de publicaciones
+  groupsMap.forEach((groupItems) => {
+    // A. Encontrar la publicación con el MENOR PRECIO base (priorizar Clásica / menor costo real)
+    const sortedByPrice = [...groupItems].sort((a, b) => a.price - b.price);
+    const lowestItem = sortedByPrice[0];
+
+    // B. Calcular el precio limpio basándonos en la oferta más económica de la lista
+    const cleanPriceResult = calculateCleanPrice(
+      lowestItem.price,
+      lowestItem.listing_type_id || 'gold_special',
+      Boolean(lowestItem.free_shipping),
+      config
+    );
+
+    // C. Sanitizar el título principal
+    const cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(lowestItem.title) : lowestItem.title;
+
+    // D. Fusionar imágenes de todas las publicaciones del grupo sin duplicados
+    const allPicturesMap = new Map<string, string>();
+    groupItems.forEach((item) => {
+      if (item.pictures) {
+        item.pictures.forEach((pic) => {
+          if (pic.url) allPicturesMap.set(pic.url, pic.url);
+        });
+      }
+      if (item.thumbnail) allPicturesMap.set(item.thumbnail, item.thumbnail);
+    });
+    const combinedPictures = Array.from(allPicturesMap.keys()).map((url) => ({ url }));
+
+    // E. Extraer variantes entre publicaciones
+    const variants: ProductVariant[] = [];
+    groupItems.forEach((item) => {
+      const isPremium = item.listing_type_id === 'gold_pro' || item.listing_type_id === 'gold_premium';
+      const variantLabel = isPremium ? 'Opción Cuotas (Premium)' : 'Opción Clásica';
+
+      variants.push({
+        id: item.id,
+        name: groupItems.length > 1 ? 'Versión ML' : 'Variante',
+        value: `${variantLabel}${item.free_shipping ? ' + Envío Gratis' : ''}`,
+        price: `$ ${item.price.toLocaleString('es-AR')}`,
+        meli_id: item.id,
+      });
+
+      if (item.attributes && Array.isArray(item.attributes)) {
+        item.attributes.forEach((attr) => {
+          if (attr.name && attr.value_name && ['Color', 'Talle', 'Tamaño', 'Modelo', 'Material', 'Capacidad'].includes(attr.name)) {
+            variants.push({
+              id: `${item.id}-${attr.id || attr.name}`,
+              name: attr.name,
+              value: attr.value_name,
+              price: `$ ${item.price.toLocaleString('es-AR')}`,
+              meli_id: item.id,
+            });
+          }
+        });
+      }
+    });
+
+    // F. Generar descripción limpia combinada
+    const rawDesc = lowestItem.description || groupItems.find((i) => i.description)?.description || '';
+    const cleanDesc = config.sanitizeDescription ? sanitizeMeliDescription(rawDesc, cleanTitle) : rawDesc;
+
+    consolidatedList.push({
+      id: lowestItem.id,
+      title: cleanTitle,
+      category_name: lowestItem.category_name || 'Mercado Libre',
+      category_id: lowestItem.category_id,
+      lowestBasePrice: lowestItem.price,
+      lowestPriceItem: lowestItem,
+      cleanPriceResult,
+      pictures: combinedPictures.length > 0 ? combinedPictures : [{ url: lowestItem.thumbnail }],
+      groupedItems: groupItems,
+      meli_ids: groupItems.map((i) => i.id),
+      variants,
+      description: cleanDesc,
+      permalink: lowestItem.permalink,
+    });
+  });
+
+  return consolidatedList;
 }

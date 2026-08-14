@@ -1,3 +1,11 @@
+export interface ProductVariant {
+  id?: string;
+  name: string; // ej: "Color", "Modelo", "Talle", "Publicación ML"
+  value: string; // ej: "Negro Mate", "Grande 20cm", "Opción Clásica"
+  price?: string;
+  meli_id?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -17,6 +25,8 @@ export interface Product {
   ancho?: number; // Ancho en centímetros (ej: 10 cm)
   largo?: number; // Largo en centímetros (ej: 10 cm)
   meli_id?: string; // ID de la publicación de Mercado Libre (ej: MLA123456789)
+  meli_ids?: string[]; // IDs de publicaciones de Mercado Libre agrupadas/consolidadas
+  variants?: ProductVariant[]; // Opciones/Variantes del producto
 }
 
 
