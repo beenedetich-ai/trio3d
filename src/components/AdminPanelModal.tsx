@@ -129,11 +129,42 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPublishedStatus, setFilterPublishedStatus] = useState<'all' | 'new_only' | 'published_only'>('all');
   const [targetWebCategory, setTargetWebCategory] = useState<string>('auto');
+  const [targetWebSubcategory, setTargetWebSubcategory] = useState<string>('');
   const [itemTargetCategories, setItemTargetCategories] = useState<Record<string, string>>({});
+  const [itemTargetSubcategories, setItemTargetSubcategories] = useState<Record<string, string>>({});
   const [discountPercent, setDiscountPercent] = useState<number>(15);
   const [isImportingMeli, setIsImportingMeli] = useState(false);
   const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(DEFAULT_MELI_PRICING_CONFIG);
   const [showPricingConfigPanel, setShowPricingConfigPanel] = useState<boolean>(true);
+
+  const availableSubcategories = React.useMemo(() => {
+    const set = new Set<string>();
+
+    if (targetWebCategory && targetWebCategory !== 'auto') {
+      // Subcategorías registradas en el mapa para la categoría seleccionada
+      const mapList = subcategoriesMap[targetWebCategory] || [];
+      mapList.forEach((s) => set.add(s));
+
+      // Subcategorías presentes en productos de esa categoría
+      products.forEach((p) => {
+        if (p.category === targetWebCategory) {
+          if (p.subcategory) set.add(p.subcategory);
+          if (p.subcategories) p.subcategories.forEach((s) => set.add(s));
+        }
+      });
+    } else {
+      // Si está en 'auto', compilar TODAS las subcategorías ya creadas en la web
+      Object.values(subcategoriesMap).forEach((list) => {
+        if (Array.isArray(list)) list.forEach((s) => set.add(s));
+      });
+      products.forEach((p) => {
+        if (p.subcategory) set.add(p.subcategory);
+        if (p.subcategories) p.subcategories.forEach((s) => set.add(s));
+      });
+    }
+
+    return Array.from(set).filter(Boolean);
+  }, [targetWebCategory, subcategoriesMap, products]);
 
   // Raw JSON Debug Modal state
   const [showRawJsonModal, setShowRawJsonModal] = useState(false);
@@ -207,13 +238,20 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
       );
 
       for (const item of selectedConsolidated) {
-        // A. Determinar la categoría web a asignar (override individual > global > categoría ML)
+        // A. Determinar la categoría y subcategoría web a asignar (override individual > global > categoría ML)
         const customItemCat = itemTargetCategories[item.id];
         const catName = customItemCat && customItemCat !== 'auto'
           ? customItemCat
           : targetWebCategory !== 'auto'
           ? targetWebCategory
           : item.category_name || 'General';
+
+        const customItemSubcat = itemTargetSubcategories[item.id];
+        const subcatName = customItemSubcat && customItemSubcat !== ''
+          ? customItemSubcat
+          : targetWebSubcategory !== ''
+          ? targetWebSubcategory
+          : undefined;
 
         // B. Crear categoría en la tienda si no existe
         if (onAddCategory) {
@@ -228,10 +266,11 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
         const mainImg = item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/soportes.png';
         const allImages = item.pictures.map((p) => p.url).filter(Boolean);
 
-        // B. Crear producto consolidado en Supabase con variantes y precio basado en el menor costo
+        // B. Crear producto consolidado en Supabase con subcategoría, variantes y precio basado en el menor costo
         await onAddProduct({
           name: item.title,
           category: catName,
+          subcategory: subcatName,
           description: item.description,
           price: item.cleanPriceResult.formattedPrice,
           image: mainImg,
@@ -1899,7 +1938,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         {/* Search Query */}
                         <div>
                           <label className="block text-[11px] font-bold text-neutral-400 mb-1">Buscar por Título / Nombre</label>
@@ -1917,7 +1956,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                         {/* Publication Status */}
                         <div>
-                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado en Mercado Libre</label>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado en ML</label>
                           <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
@@ -1939,23 +1978,43 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                             className="w-full bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
                           >
                             <option value="all">Ver Todos</option>
-                            <option value="new_only">✨ Solo Artículos NUEVOS</option>
-                            <option value="published_only">🟢 Solo YA PUBLICADOS</option>
+                            <option value="new_only">✨ Solo NUEVOS</option>
+                            <option value="published_only">🟢 YA PUBLICADOS</option>
                           </select>
                         </div>
 
                         {/* Global Web Target Category */}
                         <div>
-                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">📁 Categoría Destino Web (Global)</label>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">📁 Categoría Web</label>
                           <select
                             value={targetWebCategory}
-                            onChange={(e) => setTargetWebCategory(e.target.value)}
+                            onChange={(e) => {
+                              setTargetWebCategory(e.target.value);
+                              setTargetWebSubcategory('');
+                            }}
                             className="w-full bg-neutral-950 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
                           >
                             <option value="auto">Auto (Categoría ML)</option>
                             {categories.filter((c) => c !== 'Todos').map((c) => (
                               <option key={c} value={c}>
                                 📍 {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Global Web Target Subcategory */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">🏷️ Subcategoría Web</label>
+                          <select
+                            value={targetWebSubcategory}
+                            onChange={(e) => setTargetWebSubcategory(e.target.value)}
+                            className="w-full bg-neutral-950 border border-pink-500/30 rounded-xl px-3 py-2 text-xs text-pink-300 font-bold focus:outline-none focus:border-pink-400"
+                          >
+                            <option value="">Sin Subcategoría</option>
+                            {availableSubcategories.map((sub) => (
+                              <option key={sub} value={sub}>
+                                🔹 {sub}
                               </option>
                             ))}
                           </select>
@@ -2277,21 +2336,46 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   </div>
                                 </div>
 
-                                {/* Individual Target Category Selector */}
-                                <div className="mb-3 pt-2 border-t border-white/5 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <span className="text-[10px] text-neutral-400 font-bold shrink-0">📁 Pestaña Web:</span>
-                                  <select
-                                    value={itemTargetCategories[consolidated.id] || targetWebCategory}
-                                    onChange={(e) => setItemTargetCategories({ ...itemTargetCategories, [consolidated.id]: e.target.value })}
-                                    className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none focus:border-amber-400 truncate max-w-[170px]"
-                                  >
-                                    <option value="auto">Auto ({consolidated.category_name || 'ML'})</option>
-                                    {categories.filter((c) => c !== 'Todos').map((c) => (
-                                      <option key={c} value={c}>
-                                        📍 {c}
-                                      </option>
-                                    ))}
-                                  </select>
+                                {/* Individual Target Category & Subcategory Selectors */}
+                                <div className="mb-3 pt-2 border-t border-white/5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] text-neutral-400 font-bold shrink-0">📁 Pestaña Web:</span>
+                                    <select
+                                      value={itemTargetCategories[consolidated.id] || targetWebCategory}
+                                      onChange={(e) => {
+                                        const newCat = e.target.value;
+                                        setItemTargetCategories({ ...itemTargetCategories, [consolidated.id]: newCat });
+                                        setItemTargetSubcategories({ ...itemTargetSubcategories, [consolidated.id]: '' });
+                                      }}
+                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none focus:border-amber-400 truncate max-w-[170px]"
+                                    >
+                                      <option value="auto">Auto ({consolidated.category_name || 'ML'})</option>
+                                      {categories.filter((c) => c !== 'Todos').map((c) => (
+                                        <option key={c} value={c}>
+                                          📍 {c}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] text-neutral-400 font-bold shrink-0">🏷️ Subcategoría:</span>
+                                    <select
+                                      value={itemTargetSubcategories[consolidated.id] || targetWebSubcategory}
+                                      onChange={(e) => setItemTargetSubcategories({ ...itemTargetSubcategories, [consolidated.id]: e.target.value })}
+                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-pink-300 font-bold focus:outline-none focus:border-pink-400 truncate max-w-[170px]"
+                                    >
+                                      <option value="">Sin Subcategoría</option>
+                                      {((itemTargetCategories[consolidated.id] && itemTargetCategories[consolidated.id] !== 'auto')
+                                        ? (subcategoriesMap[itemTargetCategories[consolidated.id]] || availableSubcategories)
+                                        : availableSubcategories
+                                      ).map((sub) => (
+                                        <option key={sub} value={sub}>
+                                          🔹 {sub}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </div>
 
                                 {/* Variants chips */}
