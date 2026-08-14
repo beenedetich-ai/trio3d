@@ -70,10 +70,7 @@ export default function Home() {
       {/* 1. Hero Principal */}
       <Hero />
 
-      {/* 2. Sección de Categorías Dinámicas */}
-      <Categories onSelectCategory={setSelectedCategory} categoriesList={categoryItems} />
-
-      {/* 3. Galería de Productos */}
+      {/* 2. Galería de Impresiones 3D & Catálogo Interactivo */}
       <ProductGallery
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
@@ -85,6 +82,9 @@ export default function Home() {
           setIsCartOpen(true);
         }}
       />
+
+      {/* 3. Sección de Categorías Dinámicas */}
+      <Categories onSelectCategory={setSelectedCategory} categoriesList={categoryItems} />
 
       {/* 4. Fabricación Especial On-Demand & Exclusividad */}
       <CraftsmanshipSection />
