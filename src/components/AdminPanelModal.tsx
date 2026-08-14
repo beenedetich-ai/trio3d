@@ -294,10 +294,11 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
           images: allImages.length > 0 ? allImages : [mainImg],
           materials: ['PLA Premium', 'PETG High Detail'],
           tags: ['Tienda Oficial', '3D', 'Consolidado'],
-          peso: 200,
-          alto: 10,
-          ancho: 10,
-          largo: 10,
+          peso: item.logisticData.peso,
+          alto: item.logisticData.alto,
+          ancho: item.logisticData.ancho,
+          largo: item.logisticData.largo,
+          requiresManualDimensions: item.logisticData.requiresManualDimensions,
           meli_id: item.id,
           meli_ids: item.meli_ids,
           variants: item.variants,
@@ -2360,6 +2361,22 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                         ✓ En Tienda: {consolidated.existingStoreProduct.name}
                                       </p>
                                     )}
+
+                                    {/* Especificaciones Logísticas */}
+                                    <div className="mt-1.5">
+                                      {consolidated.logisticData.requiresManualDimensions ? (
+                                        <span
+                                          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1"
+                                          title="Mercado Libre no proveyó medidas o peso. Se asignaron estimaciones y se marcó para revisión manual."
+                                        >
+                                          ⚠️ REQUIERE MEDIDAS MANUALES ({consolidated.logisticData.peso}g | {consolidated.logisticData.alto}x{consolidated.logisticData.ancho}x{consolidated.logisticData.largo}cm)
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 inline-flex items-center gap-1">
+                                          📦 {consolidated.logisticData.peso}g | {consolidated.logisticData.alto} × {consolidated.logisticData.ancho} × {consolidated.logisticData.largo} cm
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 

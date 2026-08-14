@@ -38,8 +38,13 @@ export interface MeliPublicationItem {
   permalink?: string;
   listing_type_id?: string; // 'gold_special' (Clásica) | 'gold_pro' / 'gold_premium' (Premium) | 'free'
   free_shipping?: boolean;
+  shipping?: {
+    free_shipping?: boolean;
+    logistic_type?: string;
+    dimensions?: string | null;
+  };
   description?: string;
-  attributes?: Array<{ id: string; name: string; value_name: string }>;
+  attributes?: Array<{ id: string; name: string; value_name: string; value_struct?: { number: number; unit: string } }>;
 }
 
 export interface MeliSearchFilters {

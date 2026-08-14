@@ -27,6 +27,7 @@ export interface Product {
   meli_id?: string; // ID de la publicación de Mercado Libre (ej: MLA123456789)
   meli_ids?: string[]; // IDs de publicaciones de Mercado Libre agrupadas/consolidadas
   variants?: ProductVariant[]; // Opciones/Variantes del producto
+  requiresManualDimensions?: boolean; // Etiqueta [REQUIERE MEDIDAS MANUALES]
 }
 
 

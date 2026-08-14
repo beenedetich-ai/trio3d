@@ -68,6 +68,15 @@ export interface CleanPriceResult {
   };
 }
 
+export interface LogisticData {
+  peso: number; // en gramos
+  alto: number; // en cm
+  ancho: number; // en cm
+  largo: number; // en cm
+  requiresManualDimensions: boolean;
+  formattedDimensions: string;
+}
+
 export interface ConsolidatedMeliProduct {
   /** ID representativo único (ej: ID de la publicación principal) */
   id: string;
@@ -99,6 +108,169 @@ export interface ConsolidatedMeliProduct {
   isAlreadyPublished?: boolean;
   /** Producto correspondiente en el catálogo de la tienda web si ya fue publicado */
   existingStoreProduct?: Product | null;
+  /** Datos logísticos extraídos (peso en g, dimensiones en cm, etiqueta de manual) */
+  logisticData: LogisticData;
+}
+
+/**
+ * Extrae y estandariza peso (en gramos) y dimensiones (en centímetros)
+ * a partir de la información logística de Mercado Libre (shipping.dimensions, attributes o descripción/título).
+ */
+export function extractLogisticDimensions(
+  inputItem: MeliPublicationItem | MeliPublicationItem[]
+): LogisticData {
+  const items = Array.isArray(inputItem) ? inputItem : [inputItem];
+
+  let foundAlto: number | null = null;
+  let foundAncho: number | null = null;
+  let foundLargo: number | null = null;
+  let foundPeso: number | null = null;
+
+  for (const item of items) {
+    // 1. Parsear shipping.dimensions (formato nativo de ML: "ALTOxANCHOxLARGO,PESO_GRAMOS")
+    if (item.shipping && item.shipping.dimensions) {
+      const dimStr = item.shipping.dimensions.trim();
+      const match = dimStr.match(/^(\d+(?:[\.,]\d+)?)\s*x\s*(\d+(?:[\.,]\d+)?)\s*x\s*(\d+(?:[\.,]\d+)?)(?:,\s*(\d+(?:[\.,]\d+)?))?$/i);
+      if (match) {
+        if (foundAlto === null) foundAlto = parseFloat(match[1].replace(',', '.'));
+        if (foundAncho === null) foundAncho = parseFloat(match[2].replace(',', '.'));
+        if (foundLargo === null) foundLargo = parseFloat(match[3].replace(',', '.'));
+        if (foundPeso === null && match[4]) foundPeso = parseFloat(match[4].replace(',', '.'));
+      }
+    }
+
+    // 2. Parsear ficha técnica / atributos de Mercado Libre
+    if (item.attributes && Array.isArray(item.attributes)) {
+      item.attributes.forEach((attr) => {
+        const id = (attr.id || '').toUpperCase();
+        const valName = attr.value_name || '';
+        const numVal = attr.value_struct?.number;
+        const unit = (attr.value_struct?.unit || '').toLowerCase();
+
+        // Extraer Alto
+        if (['PACKAGE_HEIGHT', 'HEIGHT', 'ALTO'].includes(id) || /alto/i.test(attr.name || '')) {
+          if (foundAlto === null) {
+            if (numVal !== undefined && numVal > 0) {
+              foundAlto = unit === 'mm' ? numVal / 10 : unit === 'm' ? numVal * 100 : numVal;
+            } else {
+              const m = valName.match(/(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?/i);
+              if (m) {
+                const n = parseFloat(m[1].replace(',', '.'));
+                const u = (m[2] || 'cm').toLowerCase();
+                foundAlto = u === 'mm' ? n / 10 : u === 'm' ? n * 100 : n;
+              }
+            }
+          }
+        }
+
+        // Extraer Ancho
+        if (['PACKAGE_WIDTH', 'WIDTH', 'ANCHO'].includes(id) || /ancho/i.test(attr.name || '')) {
+          if (foundAncho === null) {
+            if (numVal !== undefined && numVal > 0) {
+              foundAncho = unit === 'mm' ? numVal / 10 : unit === 'm' ? numVal * 100 : numVal;
+            } else {
+              const m = valName.match(/(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?/i);
+              if (m) {
+                const n = parseFloat(m[1].replace(',', '.'));
+                const u = (m[2] || 'cm').toLowerCase();
+                foundAncho = u === 'mm' ? n / 10 : u === 'm' ? n * 100 : n;
+              }
+            }
+          }
+        }
+
+        // Extraer Largo / Profundidad
+        if (['PACKAGE_LENGTH', 'LENGTH', 'LARGO', 'PROFUNDIDAD'].includes(id) || /largo|profundidad/i.test(attr.name || '')) {
+          if (foundLargo === null) {
+            if (numVal !== undefined && numVal > 0) {
+              foundLargo = unit === 'mm' ? numVal / 10 : unit === 'm' ? numVal * 100 : numVal;
+            } else {
+              const m = valName.match(/(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?/i);
+              if (m) {
+                const n = parseFloat(m[1].replace(',', '.'));
+                const u = (m[2] || 'cm').toLowerCase();
+                foundLargo = u === 'mm' ? n / 10 : u === 'm' ? n * 100 : n;
+              }
+            }
+          }
+        }
+
+        // Extraer Peso
+        if (['PACKAGE_WEIGHT', 'WEIGHT', 'PESO'].includes(id) || /peso/i.test(attr.name || '')) {
+          if (foundPeso === null) {
+            if (numVal !== undefined && numVal > 0) {
+              foundPeso = unit === 'kg' ? numVal * 1000 : numVal;
+            } else {
+              const m = valName.match(/(\d+(?:[\.,]\d+)?)\s*(g|kg|gr|gramos|kilos)?/i);
+              if (m) {
+                const n = parseFloat(m[1].replace(',', '.'));
+                const u = (m[2] || 'g').toLowerCase();
+                foundPeso = u === 'kg' || u === 'kilos' ? n * 1000 : n;
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Parsear texto de descripción o título mediante Expresiones Regulares
+    const fullText = `${item.title || ''} ${item.description || ''}`;
+
+    if (foundAlto === null || foundAncho === null || foundLargo === null) {
+      const dimRegex = /(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?\s*x\s*(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?\s*x\s*(\d+(?:[\.,]\d+)?)\s*(cm|mm|m)?/i;
+      const dimMatch = fullText.match(dimRegex);
+      if (dimMatch) {
+        const uDefault = dimMatch[6] || dimMatch[4] || dimMatch[2] || 'cm';
+        const parseUnit = (valStr: string, uStr: string) => {
+          const n = parseFloat(valStr.replace(',', '.'));
+          const u = uStr.toLowerCase();
+          return u === 'mm' ? n / 10 : u === 'm' ? n * 100 : n;
+        };
+        if (foundAlto === null) foundAlto = parseUnit(dimMatch[1], dimMatch[2] || uDefault);
+        if (foundAncho === null) foundAncho = parseUnit(dimMatch[3], dimMatch[4] || uDefault);
+        if (foundLargo === null) foundLargo = parseUnit(dimMatch[5], dimMatch[6] || uDefault);
+      }
+    }
+
+    if (foundPeso === null) {
+      const weightRegex = /(\d+(?:[\.,]\d+)?)\s*(kg|g|gr|gramos|kilos)\b/i;
+      const wMatch = fullText.match(weightRegex);
+      if (wMatch) {
+        const n = parseFloat(wMatch[1].replace(',', '.'));
+        const u = wMatch[2].toLowerCase();
+        foundPeso = u === 'kg' || u === 'kilos' ? n * 1000 : n;
+      }
+    }
+  }
+
+  // Determinar si falta alguna medida fundamental
+  const requiresManualDimensions =
+    foundAlto === null ||
+    foundAncho === null ||
+    foundLargo === null ||
+    foundPeso === null ||
+    foundAlto <= 0 ||
+    foundAncho <= 0 ||
+    foundLargo <= 0 ||
+    foundPeso <= 0;
+
+  const finalAlto = Math.round(foundAlto && foundAlto > 0 ? foundAlto : 10);
+  const finalAncho = Math.round(foundAncho && foundAncho > 0 ? foundAncho : 10);
+  const finalLargo = Math.round(foundLargo && foundLargo > 0 ? foundLargo : 10);
+  const finalPeso = Math.round(foundPeso && foundPeso > 0 ? foundPeso : 200);
+
+  const formattedDimensions = requiresManualDimensions
+    ? `⚠️ REQUIERE MEDIDAS MANUALES (Est.: ${finalPeso}g | ${finalAlto}x${finalAncho}x${finalLargo}cm)`
+    : `📦 ${finalPeso}g | ${finalAlto} × ${finalAncho} × ${finalLargo} cm`;
+
+  return {
+    peso: finalPeso,
+    alto: finalAlto,
+    ancho: finalAncho,
+    largo: finalLargo,
+    requiresManualDimensions,
+    formattedDimensions,
+  };
 }
 
 /**
@@ -362,7 +534,8 @@ export function findMatchingStoreProduct(
 /**
  * Agrupa publicaciones de Mercado Libre duplicadas o con variantes (ej: Clásica vs Premium)
  * y calcula el precio neto limpio tomando como base la publicación de MENOR PRECIO.
- * Además, verifica contra el catálogo existente de la tienda web para señalar [NUEVO] o [YA PUBLICADO].
+ * Además, verifica contra el catálogo existente de la tienda web para señalar [NUEVO] o [YA PUBLICADO]
+ * y extrae las especificaciones logísticas (peso y dimensiones).
  */
 export function groupAndDeduplicateMeliPublications(
   items: MeliPublicationItem[],
@@ -385,6 +558,7 @@ export function groupAndDeduplicateMeliPublications(
       const cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(item.title) : item.title;
       const cleanDesc = config.sanitizeDescription ? sanitizeMeliDescription(item.description || '', cleanTitle) : item.description || '';
       const existingMatch = findMatchingStoreProduct([item.id], cleanTitle, existingProducts);
+      const logisticData = extractLogisticDimensions(item);
 
       return {
         id: item.id,
@@ -402,6 +576,7 @@ export function groupAndDeduplicateMeliPublications(
         permalink: item.permalink,
         isAlreadyPublished: Boolean(existingMatch),
         existingStoreProduct: existingMatch || null,
+        logisticData,
       };
     });
   }
@@ -487,6 +662,9 @@ export function groupAndDeduplicateMeliPublications(
     const meliIds = groupItems.map((i) => i.id);
     const existingMatch = findMatchingStoreProduct(meliIds, cleanTitle, existingProducts);
 
+    // H. Extraer especificaciones logísticas (peso y dimensiones)
+    const logisticData = extractLogisticDimensions(groupItems);
+
     consolidatedList.push({
       id: lowestItem.id,
       title: cleanTitle,
@@ -503,6 +681,7 @@ export function groupAndDeduplicateMeliPublications(
       permalink: lowestItem.permalink,
       isAlreadyPublished: Boolean(existingMatch),
       existingStoreProduct: existingMatch || null,
+      logisticData,
     });
   });
 
