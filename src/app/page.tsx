@@ -13,7 +13,9 @@ import { Footer } from '@/components/Footer';
 import { WhatsAppFloat } from '@/components/WhatsAppFloat';
 import { AdminPanelModal } from '@/components/AdminPanelModal';
 import { CartDrawer } from '@/components/CartDrawer';
+import { MeliTokenKeepAlive } from '@/components/MeliTokenKeepAlive';
 import { useProductStore } from '@/hooks/useProductStore';
+
 import { useCartStore } from '@/hooks/useCartStore';
 import { useCategoryStore } from '@/hooks/useCategoryStore';
 import { useSubcategoryStore } from '@/hooks/useSubcategoryStore';
@@ -132,6 +134,10 @@ export default function Home() {
         onAddSubcategory={addSubcategory}
         onRemoveSubcategory={removeSubcategory}
       />
+
+      {/* Mercado Libre Background Token Refresh Worker */}
+      <MeliTokenKeepAlive />
     </main>
   );
 }
+

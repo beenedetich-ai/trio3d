@@ -22,12 +22,15 @@ CREATE TABLE IF NOT EXISTS public.products (
   alto INTEGER DEFAULT 10,
   ancho INTEGER DEFAULT 10,
   largo INTEGER DEFAULT 10,
+  meli_id TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Si la tabla ya existe, aseguramos que la columna 'images' y 'subcategories' existan:
+-- Si la tabla ya existe, aseguramos que las columnas adicionales existan:
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS subcategories TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS meli_id TEXT;
+
 
 -- 2. TABLA DE CATEGORÍAS
 CREATE TABLE IF NOT EXISTS public.categories (
@@ -63,7 +66,37 @@ CREATE POLICY "Permitir todo en productos" ON public.products FOR ALL USING (tru
 CREATE POLICY "Permitir todo en categorías" ON public.categories FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo en subcategorías" ON public.subcategories FOR ALL USING (true) WITH CHECK (true);
 
--- 5. CREACIÓN DEL BUCKET DE IMÁGENES
+-- 5. TABLA DE CONFIGURACIÓN DE MERCADO LIBRE
+CREATE TABLE IF NOT EXISTS public.mercadolibre_config (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  client_id TEXT NOT NULL,
+  client_secret TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL DEFAULT 'https://trio-3d.beenedetich.workers.dev/meli/redirect',
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.mercadolibre_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir todo en mercadolibre_config" ON public.mercadolibre_config;
+CREATE POLICY "Permitir todo en mercadolibre_config" ON public.mercadolibre_config FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. TABLA DE TOKENS OAUTH DE MERCADO LIBRE
+CREATE TABLE IF NOT EXISTS public.mercadolibre_tokens (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  user_id BIGINT,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  token_type TEXT DEFAULT 'Bearer',
+  expires_in INTEGER NOT NULL,
+  scope TEXT,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.mercadolibre_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_tokens;
+CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_tokens FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. CREACIÓN DEL BUCKET DE IMÁGENES
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('product-images', 'product-images', true)
 ON CONFLICT (id) DO NOTHING;
@@ -72,3 +105,5 @@ DROP POLICY IF EXISTS "Permitir subida y lectura pública de imágenes" ON stora
 
 CREATE POLICY "Permitir subida y lectura pública de imágenes" ON storage.objects
 FOR ALL USING (bucket_id = 'product-images') WITH CHECK (bucket_id = 'product-images');
+
+

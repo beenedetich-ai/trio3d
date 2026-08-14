@@ -16,7 +16,9 @@ export interface Product {
   alto?: number; // Alto en centímetros (ej: 10 cm)
   ancho?: number; // Ancho en centímetros (ej: 10 cm)
   largo?: number; // Largo en centímetros (ej: 10 cm)
+  meli_id?: string; // ID de la publicación de Mercado Libre (ej: MLA123456789)
 }
+
 
 export const CATEGORIES = [
   'Todos',

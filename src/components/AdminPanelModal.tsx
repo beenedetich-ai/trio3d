@@ -1,12 +1,22 @@
 'use client';
 
-import React, { useState, ChangeEvent } from 'react';
-import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, RefreshCw, Star, Download, Copy, Lock, Loader2 } from 'lucide-react';
+import React, { useState, ChangeEvent, useEffect } from 'react';
+import { X, Plus, Trash2, Edit2, Upload, Image as ImageIcon, CheckCircle, RefreshCw, Star, Download, Copy, Lock, Loader2, ShieldCheck, Eye, EyeOff, ExternalLink, Key, Search, Filter, Calendar, Percent, CheckSquare, Square, PackageCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Product, CATEGORIES } from '@/data/products';
 import { SubcategoryMap, DEFAULT_SUBCATEGORIES } from '@/hooks/useSubcategoryStore';
 import { CategoryItem } from '@/hooks/useCategoryStore';
 import { uploadProductImage, isSupabaseConfigured } from '@/lib/supabase';
+import { MercadoLibreService, MeliPublicationItem } from '@/services/mercadoLibreService';
+import {
+  calculateCleanPrice,
+  sanitizeMeliTitle,
+  sanitizeMeliDescription,
+  MeliPricingConfig,
+  DEFAULT_MELI_PRICING_CONFIG,
+} from '@/utils/meliSanitizer';
+
+
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -48,8 +58,274 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [inputPassword, setInputPassword] = useState<string>('');
   const [authError, setAuthError] = useState<boolean>(false);
 
-  const [activeTab, setActiveTab] = useState<'create' | 'list' | 'export'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'list' | 'export' | 'mercadolibre'>('create');
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Mercado Libre Integration States
+  const [meliClientId, setMeliClientId] = useState('');
+  const [meliClientSecret, setMeliClientSecret] = useState('');
+  const [meliRedirectUri, setMeliRedirectUri] = useState('https://trio-3d.beenedetich.workers.dev/meli/redirect');
+  const [copiedMeliSql, setCopiedMeliSql] = useState(false);
+
+  const handleCopyMeliSql = () => {
+    const sql = `-- CREACIÓN DE TABLAS DE MERCADO LIBRE EN SUPABASE
+CREATE TABLE IF NOT EXISTS public.mercadolibre_config (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  client_id TEXT NOT NULL,
+  client_secret TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL DEFAULT 'https://trio-3d.beenedetich.workers.dev/meli/redirect',
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.mercadolibre_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir todo en mercadolibre_config" ON public.mercadolibre_config;
+CREATE POLICY "Permitir todo en mercadolibre_config" ON public.mercadolibre_config FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.mercadolibre_tokens (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  user_id BIGINT,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  token_type TEXT DEFAULT 'Bearer',
+  expires_in INTEGER NOT NULL,
+  scope TEXT,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.mercadolibre_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_tokens;
+CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_tokens FOR ALL USING (true) WITH CHECK (true);`;
+
+    navigator.clipboard.writeText(sql);
+    setCopiedMeliSql(true);
+    setTimeout(() => setCopiedMeliSql(false), 3000);
+  };
+
+  const [showMeliSecret, setShowMeliSecret] = useState(false);
+  const [isSavingMeli, setIsSavingMeli] = useState(false);
+  const [isMeliLoaded, setIsMeliLoaded] = useState(false);
+  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
+  const [meliTokens, setMeliTokens] = useState<{
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    user_id?: number;
+    expires_at?: string;
+    updated_at?: string;
+  } | null>(null);
+
+  // Mercado Libre Sub-tabs and Publications States
+  const [meliSubTab, setMeliSubTab] = useState<'publications' | 'config'>('publications');
+  const [meliPublications, setMeliPublications] = useState<MeliPublicationItem[]>([]);
+  const [isSearchingMeliPubs, setIsSearchingMeliPubs] = useState(false);
+  const [selectedMeliItemIds, setSelectedMeliItemIds] = useState<string[]>([]);
+  const [meliSearchError, setMeliSearchError] = useState<string | null>(null);
+
+  // Filters & Pricing Recalculation state
+  const [filterQuery, setFilterQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [discountPercent, setDiscountPercent] = useState<number>(15);
+  const [isImportingMeli, setIsImportingMeli] = useState(false);
+  const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(DEFAULT_MELI_PRICING_CONFIG);
+  const [showPricingConfigPanel, setShowPricingConfigPanel] = useState<boolean>(true);
+
+  // Raw JSON Debug Modal state
+  const [showRawJsonModal, setShowRawJsonModal] = useState(false);
+  const [rawDebugData, setRawDebugData] = useState<any>(null);
+
+  const handleOpenRawDebugModal = () => {
+    const debugInfo = MercadoLibreService.getLastRawDebugInfo();
+    setRawDebugData(debugInfo || { message: 'Aún no se ha realizado ninguna consulta a la API de Mercado Libre. Hacé clic en Buscar / Aplicar Filtros primero.' });
+    setShowRawJsonModal(true);
+  };
+
+
+  const handleFetchMeliPublications = async () => {
+    setIsSearchingMeliPubs(true);
+    setMeliSearchError(null);
+    try {
+      const items = await MercadoLibreService.searchUserItems({
+        status: filterStatus,
+        query: filterQuery,
+      });
+      setMeliPublications(items);
+      setSelectedMeliItemIds([]);
+      if (items.length === 0) {
+        setMeliSearchError('No se encontraron publicaciones con el filtro seleccionado.');
+      }
+    } catch (err: any) {
+      console.error('Error buscando publicaciones ML:', err);
+      setMeliSearchError(err.message || 'Error al conectar con Mercado Libre (fetch falló)');
+    } finally {
+      setIsSearchingMeliPubs(false);
+    }
+  };
+
+
+  const handleToggleSelectAllMeli = () => {
+    if (selectedMeliItemIds.length === meliPublications.length) {
+      setSelectedMeliItemIds([]);
+    } else {
+      setSelectedMeliItemIds(meliPublications.map((item) => item.id));
+    }
+  };
+
+  const handleToggleSelectItem = (id: string) => {
+    setSelectedMeliItemIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleImportSelectedItems = async () => {
+    if (selectedMeliItemIds.length === 0) {
+      alert('Por favor seleccioná al menos una publicación para importar.');
+      return;
+    }
+
+    setIsImportingMeli(true);
+    let count = 0;
+
+    try {
+      const selectedItems = meliPublications.filter((p) => selectedMeliItemIds.includes(p.id));
+
+      for (const item of selectedItems) {
+        const catName = item.category_name || 'General';
+
+        // 1. Crear categoría si no existe aún
+        if (onAddCategory) {
+          await onAddCategory({
+            name: catName,
+            badge: 'Tienda Oficial',
+            desc: 'Categoría sincronizada desde Mercado Libre',
+            image: item.pictures[0]?.url || item.thumbnail || '/images/hero.png',
+          });
+        }
+
+        // 2. Recalcular precio limpio sin comisiones ni recargos de ML
+        const priceResult = calculateCleanPrice(
+          item.price,
+          item.listing_type_id || 'gold_special',
+          Boolean(item.free_shipping),
+          meliPricingConfig
+        );
+
+        // 3. Sanitizar Título y Descripción (eliminar marcas ML, cuotas, envíos gratis y adaptar a tienda oficial)
+        const cleanedTitle = meliPricingConfig.sanitizeTitle ? sanitizeMeliTitle(item.title) : item.title;
+        const rawDesc = item.description || `Producto oficial de diseño e impresión 3D - ${item.title}`;
+        const cleanedDesc = meliPricingConfig.sanitizeDescription ? sanitizeMeliDescription(rawDesc, cleanedTitle) : rawDesc;
+
+        const mainImg = item.pictures[0]?.url || item.thumbnail || '/images/soportes.png';
+        const allImages = item.pictures.map((p) => p.url).filter(Boolean);
+
+        // 4. Crear producto en Supabase con meli_id, precio limpio y contenido sanitizado
+        await onAddProduct({
+          name: cleanedTitle,
+          category: catName,
+          description: cleanedDesc,
+          price: priceResult.formattedPrice,
+          image: mainImg,
+          images: allImages.length > 0 ? allImages : [mainImg],
+          materials: ['PLA Premium', 'PETG High Detail'],
+          tags: ['Tienda Oficial', '3D', 'Limpio'],
+          peso: 200,
+          alto: 10,
+          ancho: 10,
+          largo: 10,
+          meli_id: item.id,
+        });
+
+        count++;
+      }
+
+      setNotification(`¡Se importaron exitosamente ${count} productos con precio neto limpio y contenido sanitizado!`);
+      setTimeout(() => setNotification(null), 5000);
+      setSelectedMeliItemIds([]);
+    } catch (err: any) {
+      console.error('Error importando publicaciones:', err);
+      alert('Error importando publicaciones: ' + (err.message || err));
+    } finally {
+      setIsImportingMeli(false);
+    }
+  };
+
+
+
+
+  useEffect(() => {
+    if (activeTab === 'mercadolibre' && !isMeliLoaded) {
+      MercadoLibreService.getConfigFromSupabase().then((cfg) => {
+        if (cfg) {
+          setMeliClientId(cfg.client_id || '');
+          setMeliClientSecret(cfg.client_secret || '');
+          if (cfg.redirect_uri) setMeliRedirectUri(cfg.redirect_uri);
+        }
+      });
+
+      MercadoLibreService.getTokensFromSupabase().then((toks) => {
+        if (toks) setMeliTokens(toks);
+        setIsMeliLoaded(true);
+      });
+    }
+  }, [activeTab, isMeliLoaded]);
+
+  const handleSaveMeliConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!meliClientId.trim() || !meliClientSecret.trim()) {
+      alert('Por favor ingresá tanto el Client ID como el Client Secret.');
+      return;
+    }
+    setIsSavingMeli(true);
+    const success = await MercadoLibreService.saveConfigToSupabase({
+      client_id: meliClientId.trim(),
+      client_secret: meliClientSecret.trim(),
+      redirect_uri: meliRedirectUri.trim(),
+    });
+    setIsSavingMeli(false);
+
+    if (success) {
+      setNotification('¡Configuración de Mercado Libre guardada encriptada en Supabase!');
+      setTimeout(() => setNotification(null), 4000);
+    } else {
+      alert('No se pudo guardar la configuración en Supabase. Verificá que exista la tabla "mercadolibre_config".');
+    }
+  };
+
+  const handleRefreshTokenInAdmin = async () => {
+    if (!meliTokens?.refresh_token) {
+      alert('No hay ningún Refresh Token guardado en la base de datos.');
+      return;
+    }
+    if (!meliClientId.trim() || !meliClientSecret.trim()) {
+      alert('Client ID y Client Secret son requeridos para refrescar el token.');
+      return;
+    }
+
+    setIsRefreshingToken(true);
+    try {
+      const meliService = new MercadoLibreService(meliClientId, meliClientSecret, meliRedirectUri);
+      const newTokens = await meliService.refreshToken(meliTokens.refresh_token);
+      await MercadoLibreService.saveTokensToSupabase(newTokens);
+      setMeliTokens(newTokens);
+      setNotification('¡Token de Mercado Libre refrescado y guardado en Supabase!');
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      alert('Error al refrescar token: ' + (err.message || err));
+    } finally {
+      setIsRefreshingToken(false);
+    }
+  };
+
+  const handleTriggerAuthorize = () => {
+    if (!meliClientId.trim()) {
+      alert('Por favor ingresá un Client ID antes de iniciar la autorización.');
+      return;
+    }
+    const meliService = new MercadoLibreService(meliClientId, meliClientSecret, meliRedirectUri);
+    const authUrl = meliService.getAuthorizeUrl(meliRedirectUri);
+    window.open(authUrl, '_blank');
+  };
+
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +337,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       setAuthError(true);
     }
   };
+
 
   // Form states
   const [name, setName] = useState('');
@@ -529,7 +806,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
               <Download className="w-4 h-4 text-brand-500" />
               <span>Exportar Datos</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('mercadolibre')}
+              className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-2 ${
+                activeTab === 'mercadolibre'
+                  ? 'bg-neutral-950 text-amber-400 border-t-2 border-amber-500'
+                  : 'text-neutral-400 hover:text-amber-400'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-500" />
+              <span>Mercado Libre</span>
+            </button>
           </div>
+
 
           {/* Alert Banner */}
           {notification && (
@@ -1328,11 +1618,678 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
               </div>
             )}
+
+            {activeTab === 'mercadolibre' && (
+              <div className="space-y-6">
+                {/* Sub-tabs bar */}
+                <div className="flex border-b border-white/10 pb-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMeliSubTab('publications')}
+                    className={`px-4 py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                      meliSubTab === 'publications'
+                        ? 'bg-amber-500 text-neutral-950 shadow-lg shadow-amber-500/20'
+                        : 'bg-neutral-900 text-neutral-400 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    <PackageCheck className="w-4 h-4" />
+                    <span>Publicaciones Mercado Libre</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMeliSubTab('config')}
+                    className={`px-4 py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                      meliSubTab === 'config'
+                        ? 'bg-amber-500 text-neutral-950 shadow-lg shadow-amber-500/20'
+                        : 'bg-neutral-900 text-neutral-400 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Configuración & OAuth</span>
+                  </button>
+                </div>
+
+                {/* Sub-tab 1: Configuración & OAuth */}
+                {meliSubTab === 'config' && (
+                  <div className="space-y-6">
+                    {/* Header Banner */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 border border-amber-500/30 flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                          <ShieldCheck className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-extrabold text-amber-300">Integración con Mercado Libre OAuth 2.0</h4>
+                          <p className="text-xs text-neutral-300 mt-1">
+                            Configurá tus credenciales de aplicación de Mercado Libre. El <strong className="text-amber-300">Client Secret</strong> se guardará encriptado de forma segura en la base de datos Supabase (<code className="text-amber-400">public.mercadolibre_config</code>).
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyMeliSql}
+                        className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
+                        title="Copiar código SQL para ejecutar en Supabase SQL Editor"
+                      >
+                        {copiedMeliSql ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedMeliSql ? '¡SQL Copiado!' : 'Copiar SQL Tablas Supabase'}</span>
+                      </button>
+                    </div>
+
+                    {/* Form Credenciales */}
+                    <form onSubmit={handleSaveMeliConfig} className="p-5 rounded-2xl bg-neutral-900/80 border border-white/10 space-y-4">
+                      <h4 className="text-xs font-extrabold text-neutral-200 uppercase tracking-wider flex items-center gap-2">
+                        <Key className="w-4 h-4 text-amber-400" />
+                        Credenciales de la Aplicación
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-300 mb-1">
+                            Client ID (App ID) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej: 1234567890123456"
+                            value={meliClientId}
+                            onChange={(e) => setMeliClientId(e.target.value)}
+                            className="w-full bg-neutral-950 border border-white/15 rounded-xl px-4 py-2.5 text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-300 mb-1 flex items-center justify-between">
+                            <span>Client Secret (Encriptado) *</span>
+                            <span className="text-[10px] text-amber-400 font-normal">🔒 Encriptación AES</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showMeliSecret ? 'text' : 'password'}
+                              required
+                              placeholder="Clave secreta de Mercado Libre"
+                              value={meliClientSecret}
+                              onChange={(e) => setMeliClientSecret(e.target.value)}
+                              className="w-full bg-neutral-950 border border-white/15 rounded-xl pl-4 pr-10 py-2.5 text-sm text-white font-mono placeholder-neutral-500 focus:outline-none focus:border-amber-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowMeliSecret(!showMeliSecret)}
+                              className="absolute right-3 top-2.5 text-neutral-400 hover:text-white"
+                            >
+                              {showMeliSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-neutral-300 mb-1">
+                          Redirect URI (URL de Redirección)
+                        </label>
+                        <input
+                          type="url"
+                          required
+                          value={meliRedirectUri}
+                          onChange={(e) => setMeliRedirectUri(e.target.value)}
+                          className="w-full bg-neutral-950 border border-white/15 rounded-xl px-4 py-2.5 text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div className="pt-2 flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={isSavingMeli}
+                          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-neutral-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          {isSavingMeli ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                          <span>{isSavingMeli ? 'Guardando...' : 'Guardar Credenciales en Supabase'}</span>
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Section Authorize Button */}
+                    <div className="p-5 rounded-2xl bg-neutral-900/90 border border-amber-500/20 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>⚡ Proceso de Autorización (Authorize)</span>
+                          </h4>
+                          <p className="text-xs text-neutral-400 mt-0.5">
+                            Iniciá la autorización OAuth 2.0 redirigiendo tu cuenta a Mercado Libre para autorizar a la app y recibir el <code className="text-amber-400 font-mono">code</code>.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleTriggerAuthorize}
+                          className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-extrabold text-xs shadow-xl shadow-amber-500/25 flex items-center gap-2 transition-all cursor-pointer shrink-0"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Iniciar Authorize</span>
+                        </button>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-neutral-950 border border-white/10 text-xs font-mono text-neutral-400 space-y-1">
+                        <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">URL de Autorización Generada:</div>
+                        <div className="text-amber-300 break-all">
+                          {`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${meliClientId || 'CLIENT_ID'}&redirect_uri=${encodeURIComponent(meliRedirectUri)}`}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section Tokens Guardados en Supabase */}
+                    <div className="p-5 rounded-2xl bg-neutral-900/90 border border-white/10 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <Key className="w-4 h-4 text-emerald-400" />
+                          <span>Tokens Guardados en Supabase (public.mercadolibre_tokens)</span>
+                        </h4>
+
+                        {meliTokens && (
+                          <button
+                            type="button"
+                            onClick={handleRefreshTokenInAdmin}
+                            disabled={isRefreshingToken}
+                            className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            {isRefreshingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            <span>{isRefreshingToken ? 'Refrescando...' : 'Refrescar Token Ahora'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {meliTokens ? (
+                        <div className="space-y-3">
+                          <div className="p-3.5 rounded-xl bg-neutral-950 border border-white/10 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-400 font-bold uppercase tracking-wider">Access Token:</span>
+                              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                                User ID: {meliTokens.user_id || 'N/A'}
+                              </span>
+                            </div>
+                            <p className="font-mono text-xs text-slate-200 break-all bg-neutral-900 p-2 rounded-lg border border-white/5">
+                              {meliTokens.access_token}
+                            </p>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-neutral-950 border border-white/10 space-y-2">
+                            <div className="text-xs text-neutral-400 font-bold uppercase tracking-wider">Refresh Token:</div>
+                            <p className="font-mono text-xs text-amber-300 break-all bg-neutral-900 p-2 rounded-lg border border-white/5">
+                              {meliTokens.refresh_token}
+                            </p>
+                            {meliTokens.expires_at && (
+                              <p className="text-[11px] text-neutral-400 mt-1">
+                                Expira el: <span className="text-white font-mono">{new Date(meliTokens.expires_at).toLocaleString()}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-neutral-950 border border-dashed border-white/10 text-center text-xs text-neutral-400">
+                          <span>No se encontraron tokens guardados en Supabase. Hacé clic en <strong>Iniciar Authorize</strong> para obtener y guardar tu primer token.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-tab 2: Publicaciones Mercado Libre */}
+                {meliSubTab === 'publications' && (
+                  <div className="space-y-6">
+                    {/* Filters Top Bar */}
+                    <div className="p-5 rounded-2xl bg-neutral-900/90 border border-white/10 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <Filter className="w-4 h-4 text-amber-400" />
+                          <span>Filtros de Publicaciones de Mercado Libre</span>
+                        </h4>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleFetchMeliPublications}
+                            disabled={isSearchingMeliPubs}
+                            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                          >
+                            {isSearchingMeliPubs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            <span>{isSearchingMeliPubs ? 'Buscando...' : 'Buscar / Aplicar Filtros'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleOpenRawDebugModal}
+                            className="px-3.5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-white/15 text-amber-300 font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer"
+                            title="Ver JSON crudo de la respuesta obtenida de la API de Mercado Libre"
+                          >
+                            <Copy className="w-4 h-4 text-amber-400" />
+                            <span>Ver JSON Crudo (Debug)</span>
+                          </button>
+
+                          {meliPublications.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleImportSelectedItems}
+                              disabled={isImportingMeli || selectedMeliItemIds.length === 0}
+                              className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-lg ${
+                                selectedMeliItemIds.length > 0
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950 cursor-pointer shadow-emerald-500/20'
+                                  : 'bg-neutral-800 text-neutral-500 border border-white/5 cursor-not-allowed'
+                              }`}
+                            >
+                              {isImportingMeli ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                              <span>{isImportingMeli ? 'Importando...' : `Importar Seleccionadas (${selectedMeliItemIds.length})`}</span>
+                            </button>
+                          )}
+                        </div>
+
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Search Query */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Buscar por Título / Nombre</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Ej: Maceta, Llavero, Soporte..."
+                              value={filterQuery}
+                              onChange={(e) => setFilterQuery(e.target.value)}
+                              className="w-full bg-neutral-950 border border-white/15 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500"
+                            />
+                            <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-2.5" />
+                          </div>
+                        </div>
+
+                        {/* Publication Status */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-400 mb-1">Estado de Publicación</label>
+                          <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="w-full bg-neutral-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="all">Todos los Estados</option>
+                            <option value="active">🟢 Activas (active)</option>
+                            <option value="paused">🟡 Pausadas (paused)</option>
+                            <option value="closed">🔴 Cerradas (closed)</option>
+                          </select>
+                        </div>
+                      </div>
+
+
+                      {/* Pricing & Sanitization Controls Panel */}
+                      <div className="p-4 rounded-2xl bg-neutral-950/80 border border-amber-500/20 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => setShowPricingConfigPanel(!showPricingConfigPanel)}
+                            className="text-xs font-extrabold text-amber-300 flex items-center gap-2 hover:text-amber-200 transition-colors"
+                          >
+                            <Percent className="w-4 h-4 text-amber-400" />
+                            <span>⚙️ Parámetros de Recálculo de Precios y Sanitización de Contenidos</span>
+                            <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-mono">
+                              {showPricingConfigPanel ? 'Ocultar' : 'Mostrar'}
+                            </span>
+                          </button>
+
+                          {meliPublications.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleToggleSelectAllMeli}
+                              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-white/10 text-xs text-neutral-300 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              {selectedMeliItemIds.length === meliPublications.length ? (
+                                <CheckSquare className="w-4 h-4 text-amber-400" />
+                              ) : (
+                                <Square className="w-4 h-4 text-neutral-400" />
+                              )}
+                              <span>
+                                {selectedMeliItemIds.length === meliPublications.length ? 'Deseleccionar Todo' : `Seleccionar Todo (${meliPublications.length})`}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+
+                        {showPricingConfigPanel && (
+                          <div className="pt-3 border-t border-white/10 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {/* Comisión Clásica */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-neutral-300 mb-1">
+                                  Comisión Clásica ML (%):
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    value={meliPricingConfig.classicCommissionPercent}
+                                    onChange={(e) =>
+                                      setMeliPricingConfig({
+                                        ...meliPricingConfig,
+                                        classicCommissionPercent: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
+                                  />
+                                  <span className="absolute right-3 top-1.5 text-xs text-neutral-500 font-bold">%</span>
+                                </div>
+                              </div>
+
+                              {/* Comisión Premium */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-neutral-300 mb-1">
+                                  Comisión Premium ML (%):
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    value={meliPricingConfig.premiumCommissionPercent}
+                                    onChange={(e) =>
+                                      setMeliPricingConfig({
+                                        ...meliPricingConfig,
+                                        premiumCommissionPercent: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
+                                  />
+                                  <span className="absolute right-3 top-1.5 text-xs text-neutral-500 font-bold">%</span>
+                                </div>
+                              </div>
+
+                              {/* Recargo por Cuotas */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-neutral-300 mb-1">
+                                  Recargo Cuotas/Financiación (%):
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    value={meliPricingConfig.financingSurchargePercent}
+                                    onChange={(e) =>
+                                      setMeliPricingConfig({
+                                        ...meliPricingConfig,
+                                        financingSurchargePercent: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
+                                  />
+                                  <span className="absolute right-3 top-1.5 text-xs text-neutral-500 font-bold">%</span>
+                                </div>
+                              </div>
+
+                              {/* Deducción Envío Gratis ($ ARS) */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-neutral-300 mb-1">
+                                  Deducción Envío Gratis ($):
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="Ej: 3500"
+                                  value={meliPricingConfig.estimatedFreeShippingCost || ''}
+                                  onChange={(e) =>
+                                    setMeliPricingConfig({
+                                      ...meliPricingConfig,
+                                      estimatedFreeShippingCost: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                  className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Options Checkboxes */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={meliPricingConfig.sanitizeTitle}
+                                  onChange={(e) =>
+                                    setMeliPricingConfig({
+                                      ...meliPricingConfig,
+                                      sanitizeTitle: e.target.checked,
+                                    })
+                                  }
+                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-neutral-900 border-white/20"
+                                />
+                                <span className="text-xs text-neutral-300 font-bold">
+                                  Sanitizar títulos (eliminar "Envío gratis", "Cuotas", "ML")
+                                </span>
+                              </label>
+
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={meliPricingConfig.sanitizeDescription}
+                                  onChange={(e) =>
+                                    setMeliPricingConfig({
+                                      ...meliPricingConfig,
+                                      sanitizeDescription: e.target.checked,
+                                    })
+                                  }
+                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-neutral-900 border-white/20"
+                                />
+                                <span className="text-xs text-neutral-300 font-bold">
+                                  Sanitizar descripciones al tono de Tienda Oficial (conservar specs)
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Results Grid / Loading / Error */}
+                    {isSearchingMeliPubs && (
+                      <div className="py-16 text-center space-y-3 bg-neutral-900/40 rounded-2xl border border-white/5">
+                        <Loader2 className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
+                        <p className="text-xs text-neutral-300 font-medium">Buscando publicaciones en api.mercadolibre.com...</p>
+                      </div>
+                    )}
+
+                    {meliSearchError && !isSearchingMeliPubs && (
+                      <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl space-y-2 text-left">
+                        <div className="flex items-center gap-2 text-xs font-extrabold text-rose-400">
+                          <X className="w-4 h-4 text-rose-500 shrink-0" />
+                          <span>Diagnóstico de Respuesta Mercado Libre API:</span>
+                        </div>
+                        <div className="p-3 bg-neutral-950 rounded-xl border border-white/10 font-mono text-[11px] text-rose-300 break-all leading-relaxed">
+                          {meliSearchError}
+                        </div>
+                        <p className="text-[11px] text-neutral-400">
+                          Si observás un error <strong>401 / 403 / Token expirado</strong>, andá a la pestaña <strong className="text-amber-400">Configuración & OAuth</strong> y hacé clic en <strong className="text-amber-300">Iniciar Authorize</strong> o <strong className="text-emerald-400">Refrescar Token Ahora</strong>.
+                        </p>
+                      </div>
+                    )}
+
+
+                    {meliPublications.length === 0 && !isSearchingMeliPubs && !meliSearchError && (
+                      <div className="py-12 text-center bg-neutral-900/40 rounded-2xl border border-dashed border-white/10 space-y-3">
+                        <Search className="w-8 h-8 text-amber-400/60 mx-auto" />
+                        <h5 className="text-sm font-bold text-white">Búsqueda de Publicaciones de Mercado Libre</h5>
+                        <p className="text-xs text-neutral-400 max-w-md mx-auto">
+                          Haz clic en <strong className="text-amber-400 font-semibold">"Buscar / Aplicar Filtros"</strong> para traer el catálogo de publicaciones de tu cuenta.
+                        </p>
+                      </div>
+                    )}
+
+                    {meliPublications.length > 0 && !isSearchingMeliPubs && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {meliPublications.map((pub) => {
+                          const isSelected = selectedMeliItemIds.includes(pub.id);
+                          const priceResult = calculateCleanPrice(
+                            pub.price,
+                            pub.listing_type_id || 'gold_special',
+                            Boolean(pub.free_shipping),
+                            meliPricingConfig
+                          );
+
+                          return (
+                            <div
+                              key={pub.id}
+                              onClick={() => handleToggleSelectItem(pub.id)}
+                              className={`relative p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                                isSelected
+                                  ? 'bg-neutral-900 border-amber-500 shadow-lg shadow-amber-500/10'
+                                  : 'bg-neutral-900/60 border-white/10 hover:border-white/30'
+                              }`}
+                            >
+                              <div>
+                                {/* Top Row: Checkbox, ID, Status & Listing Type */}
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToggleSelectItem(pub.id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-neutral-950 border-white/20"
+                                    />
+                                    <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-white/10">
+                                      {pub.id}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      {priceResult.listingType}
+                                    </span>
+
+                                    {pub.free_shipping && (
+                                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Incluye envío gratis integrado">
+                                        Envío Gratis
+                                      </span>
+                                    )}
+
+                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                                      pub.status === 'active'
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                        : pub.status === 'paused'
+                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                        : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                    }`}>
+                                      {pub.status === 'active' ? '🟢' : pub.status === 'paused' ? '🟡' : '🔴'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Image & Main Info */}
+                                <div className="flex items-start gap-3 mb-3">
+                                  <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-neutral-950 flex-shrink-0 border border-white/10">
+                                    <img
+                                      src={pub.pictures[0]?.url || pub.thumbnail}
+                                      alt={pub.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 block truncate mb-1">
+                                      {pub.category_name || 'Mercado Libre'}
+                                    </span>
+                                    <h5 className="text-xs font-extrabold text-white line-clamp-2 leading-snug">
+                                      {meliPricingConfig.sanitizeTitle ? sanitizeMeliTitle(pub.title) : pub.title}
+                                    </h5>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Bottom Row: Price breakdown */}
+                              <div className="pt-3 border-t border-white/10 flex items-center justify-between mt-2">
+                                <div>
+                                  <div className="text-[10px] text-neutral-400 line-through">
+                                    ML original: ${pub.price.toLocaleString('es-AR')}
+                                  </div>
+                                  <div className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
+                                    <span>Neto Limpio: {priceResult.formattedPrice}</span>
+                                    {priceResult.totalDeductionPercent > 0 && (
+                                      <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-300 px-1 rounded border border-emerald-500/30">
+                                        -{priceResult.totalDeductionPercent}%
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {pub.permalink && (
+                                  <a
+                                    href={pub.permalink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-amber-400 transition-colors"
+                                    title="Ver publicación en Mercado Libre"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+
+
           </div>
           </>
           )}
         </motion.div>
       </div>
+
+      {/* Raw JSON Debug Modal */}
+      {showRawJsonModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl max-h-[85vh] bg-neutral-900 border border-white/15 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between bg-neutral-950">
+              <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Copy className="w-4 h-4 text-amber-400" />
+                <span>JSON Crudo de Respuesta API Mercado Libre (Debug)</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowRawJsonModal(false)}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto font-mono text-xs text-amber-300 bg-neutral-950 space-y-4 flex-1">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(rawDebugData, null, 2));
+                    alert('¡JSON crudo copiado al portapapeles!');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-500/30 transition-all cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar JSON Completo</span>
+                </button>
+              </div>
+
+              <pre className="whitespace-pre-wrap break-all p-4 rounded-2xl bg-neutral-900 border border-white/10 text-[11px] text-amber-200 leading-relaxed overflow-x-auto">
+                {JSON.stringify(rawDebugData, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };
+
+
