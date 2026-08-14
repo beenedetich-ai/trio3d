@@ -61,7 +61,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
       : (product.subcategory ? product.subcategory.split(',').map((s) => s.trim()).filter(Boolean) : []);
 
     const matchesSubcategory =
-      selectedSubcategory === 'Todas' || prodSubcats.includes(selectedSubcategory);
+      selectedSubcategory === 'Todas' ||
+      prodSubcats.some((s) => s.trim().toLowerCase() === selectedSubcategory.trim().toLowerCase());
 
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

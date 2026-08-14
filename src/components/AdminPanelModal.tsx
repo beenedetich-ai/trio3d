@@ -130,6 +130,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const [filterPublishedStatus, setFilterPublishedStatus] = useState<'all' | 'new_only' | 'published_only'>('all');
   const [targetWebCategory, setTargetWebCategory] = useState<string>('auto');
   const [targetWebSubcategory, setTargetWebSubcategory] = useState<string>('');
+  const [customGlobalSubcategory, setCustomGlobalSubcategory] = useState<string>('');
   const [itemTargetCategories, setItemTargetCategories] = useState<Record<string, string>>({});
   const [itemTargetSubcategories, setItemTargetSubcategories] = useState<Record<string, string>>({});
   const [discountPercent, setDiscountPercent] = useState<number>(15);
@@ -247,20 +248,36 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
           : item.category_name || 'General';
 
         const customItemSubcat = itemTargetSubcategories[item.id];
-        const subcatName = customItemSubcat && customItemSubcat !== ''
-          ? customItemSubcat
-          : targetWebSubcategory !== ''
-          ? targetWebSubcategory
-          : undefined;
+        let subcatName: string | undefined = undefined;
 
-        // B. Crear categoría en la tienda si no existe
-        if (onAddCategory) {
+        if (customItemSubcat && customItemSubcat !== '') {
+          subcatName = customItemSubcat;
+        } else if (targetWebSubcategory === '__custom__') {
+          subcatName = customGlobalSubcategory.trim() || undefined;
+        } else if (targetWebSubcategory !== '') {
+          subcatName = targetWebSubcategory;
+        }
+
+        // B. Crear categoría en la tienda únicamente si NO existe previamente (evita alertas molestas)
+        const catExists =
+          categories.some((c) => c.toLowerCase() === catName.toLowerCase()) ||
+          categoryItems.some((c) => c.name.toLowerCase() === catName.toLowerCase());
+
+        if (!catExists && onAddCategory) {
           await onAddCategory({
             name: catName,
             badge: 'Tienda Oficial',
             desc: 'Categoría sincronizada desde Mercado Libre',
             image: item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/hero.png',
           });
+        }
+
+        // C. Registrar subcategoría en la tienda si no existe aún (ej. PS5)
+        if (subcatName && onAddSubcategory && catName) {
+          const currentSubcats = subcategoriesMap[catName] || [];
+          if (!currentSubcats.some((s) => s.toLowerCase() === subcatName!.toLowerCase())) {
+            await onAddSubcategory(catName, subcatName);
+          }
         }
 
         const mainImg = item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/soportes.png';
@@ -2017,7 +2034,17 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                 🔹 {sub}
                               </option>
                             ))}
+                            <option value="__custom__">✏️ Escribir subcategoría personalizada...</option>
                           </select>
+                          {targetWebSubcategory === '__custom__' && (
+                            <input
+                              type="text"
+                              placeholder="Ej: PS5, Nintendo Switch, Voronoi..."
+                              value={customGlobalSubcategory}
+                              onChange={(e) => setCustomGlobalSubcategory(e.target.value)}
+                              className="mt-1.5 w-full bg-neutral-900 border border-pink-500/50 rounded-lg px-2.5 py-1 text-xs text-pink-300 font-bold placeholder-neutral-500 focus:outline-none focus:border-pink-400"
+                            />
+                          )}
                         </div>
                       </div>
 
