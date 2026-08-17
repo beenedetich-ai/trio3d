@@ -10,12 +10,16 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://trio3d.com'),
-  title: 'Trío 3D | Impresión 3D Personalizada de Alta Calidad',
-  description: 'Convertimos tus ideas en realidad. Impresiones 3D personalizadas de alta calidad: llaveros, decoración, soportes gamer, macetas, regalos con foto y proyectos a medida.',
+  title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
+  description: 'Convertimos tus ideas en realidad. Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos. Llaveros, decoración, soportes gamer, macetas y proyectos a medida.',
   keywords: [
     'Impresión 3D',
+    'Impresión 3D Paraná',
+    'Impresión 3D Entre Ríos',
     'Trío 3D',
+    'Trío 3D Paraná',
     'Impresiones 3D personalizadas',
+    'Coronel Uzin 1216',
     'Llaveros 3D',
     'Decoración 3D',
     'Soportes Auriculares 3D',
@@ -40,8 +44,8 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Trío 3D | Convertimos tus ideas en realidad',
-    description: 'Impresiones 3D personalizadas de alta calidad: llaveros, decoración, soportes gamer, macetas y proyectos a medida. Presupuestos al instante.',
+    title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
+    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos: llaveros, decoración, soportes gamer, macetas y proyectos a medida.',
     url: 'https://trio3d.com',
     siteName: 'Trío 3D Studio',
     images: [
@@ -49,7 +53,7 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Trío 3D Studio - Impresión 3D Personalizada',
+        alt: 'Trío 3D Studio - Impresión 3D Personalizada en Paraná',
       },
       {
         url: '/images/logo.png',
@@ -63,8 +67,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Trío 3D | Convertimos tus ideas en realidad',
-    description: 'Impresiones 3D personalizadas de alta calidad.',
+    title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
+    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos.',
     images: ['/og-image.png'],
   },
   robots: {
@@ -90,15 +94,21 @@ export default function RootLayout({
     name: 'Trío 3D',
     image: 'https://trio3d.com/og-image.png',
     logo: 'https://trio3d.com/images/logo.png',
-    description: 'Impresiones 3D personalizadas de alta calidad.',
+    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos.',
     priceRange: '$$',
     address: {
       '@type': 'PostalAddress',
+      streetAddress: 'Coronel Uzin 1216',
+      addressLocality: 'Paraná',
+      addressRegion: 'Entre Ríos',
       addressCountry: 'AR',
     },
     openingHours: 'Mo-Sa 09:00-20:00',
     telephone: '+5493434381991',
     url: 'https://trio3d.com',
+    sameAs: [
+      'https://www.instagram.com/trio3d.parana',
+    ],
   };
 
   return (

@@ -129,7 +129,7 @@ export const Footer: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5 text-neutral-300">
                 <MapPin className="w-4 h-4 text-brand-500 flex-shrink-0" />
-                <span>Envíos a todo el país</span>
+                <span>Coronel Uzin 1216, Paraná, Entre Ríos</span>
               </li>
               <li className="flex items-center gap-2.5 text-neutral-300">
                 <Clock className="w-4 h-4 text-brand-500 flex-shrink-0" />
