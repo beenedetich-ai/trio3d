@@ -74,6 +74,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://trio3d.com',
   },
+  verification: {
+    google: 'googleb5fdec3ac2e0efaf',
+  },
 };
 
 export default function RootLayout({
