@@ -52,7 +52,7 @@ export const Footer: React.FC = () => {
               </a>
 
               <a
-                href="https://facebook.com"
+                href="https://facebook.com/Trio3d.parana"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 rounded-xl bg-neutral-900 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-brand-500 hover:border-brand-500 transition-all duration-300 shadow-md"
@@ -125,7 +125,9 @@ export const Footer: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5 text-neutral-300">
                 <Mail className="w-4 h-4 text-brand-500 flex-shrink-0" />
-                <span>contacto@trio3d.com</span>
+                <a href="mailto:trio3dparana@gmail.com" className="hover:text-brand-500 transition-colors">
+                  trio3dparana@gmail.com
+                </a>
               </li>
               <li className="flex items-center gap-2.5 text-neutral-300">
                 <MapPin className="w-4 h-4 text-brand-500 flex-shrink-0" />
