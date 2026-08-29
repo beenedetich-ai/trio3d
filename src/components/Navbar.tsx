@@ -29,7 +29,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navLinks = [
     { name: 'Inicio', href: '#inicio' },
-    { name: 'Cotizador', href: '#cotizador' },
     { name: 'Galería 3D', href: '#galeria' },
     { name: 'Servicio Local', href: '#cobertura-local' },
     { name: 'Categorías', href: '#categorias' },

@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Hero } from '@/components/Hero';
-import { QuoteWidget } from '@/components/QuoteWidget';
 import { Categories } from '@/components/Categories';
 import { ProductGallery } from '@/components/ProductGallery';
 import { LocalSeoSection } from '@/components/LocalSeoSection';
@@ -100,10 +99,7 @@ export default function Home() {
       {/* 7. Explicación de cómo comprar en 4 pasos */}
       <HowToBuy />
 
-      {/* 8. Cotizador e Impresión a Medida Instantánea (Calculadora) */}
-      <QuoteWidget />
-
-      {/* 9. Preguntas Frecuentes */}
+      {/* 8. Preguntas Frecuentes */}
       <FaqSection />
 
       {/* 10. Footer con Instagram, Facebook y WhatsApp */}
