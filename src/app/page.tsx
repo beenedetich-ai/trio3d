@@ -3,8 +3,10 @@
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Hero } from '@/components/Hero';
+import { QuoteWidget } from '@/components/QuoteWidget';
 import { Categories } from '@/components/Categories';
 import { ProductGallery } from '@/components/ProductGallery';
+import { LocalSeoSection } from '@/components/LocalSeoSection';
 import { HowToBuy } from '@/components/HowToBuy';
 import { CraftsmanshipSection } from '@/components/CraftsmanshipSection';
 import { FeaturesBar } from '@/components/FeaturesBar';
@@ -83,22 +85,28 @@ export default function Home() {
         }}
       />
 
-      {/* 3. Sección de Categorías Dinámicas */}
+      {/* 3. Sección de Cobertura & Servicios Locales (Paraná, Santa Fe, Entre Ríos) */}
+      <LocalSeoSection />
+
+      {/* 4. Sección de Categorías Dinámicas */}
       <Categories onSelectCategory={setSelectedCategory} categoriesList={categoryItems} />
 
-      {/* 4. Fabricación Especial On-Demand & Exclusividad */}
+      {/* 5. Fabricación Especial On-Demand & Exclusividad */}
       <CraftsmanshipSection />
 
-      {/* 5. Barra de Beneficios (Cotización, Materiales, Garantía, Envíos) */}
+      {/* 6. Barra de Beneficios (Cotización, Materiales, Garantía, Envíos) */}
       <FeaturesBar />
 
-      {/* 6. Explicación de cómo comprar en 4 pasos */}
+      {/* 7. Explicación de cómo comprar en 4 pasos */}
       <HowToBuy />
 
-      {/* 6. Preguntas Frecuentes */}
+      {/* 8. Cotizador e Impresión a Medida Instantánea (Calculadora) */}
+      <QuoteWidget />
+
+      {/* 9. Preguntas Frecuentes */}
       <FaqSection />
 
-      {/* 7. Footer con Instagram, Facebook y WhatsApp */}
+      {/* 10. Footer con Instagram, Facebook y WhatsApp */}
       <Footer />
 
       {/* Floating Action WhatsApp */}

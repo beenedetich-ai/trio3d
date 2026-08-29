@@ -9,30 +9,31 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://trio3d.com'),
-  title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
-  description: 'Convertimos tus ideas en realidad. Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos. Llaveros, decoración, soportes gamer, macetas y proyectos a medida.',
+  metadataBase: new URL('https://trio-3d.beenedetich.workers.dev'),
+  title: 'Trío 3D | Servicio de Impresión 3D y Prototipado Rápido en Paraná, Entre Ríos',
+  description: 'Convertimos tus ideas y repuestos en realidad. Servicio profesional de Impresión 3D, Prototipado Rápido y Diseño CAD en Paraná, Santa Fe y Entre Ríos. Envíos y retiros en Coronel Uzin 1216.',
   keywords: [
     'Impresión 3D',
     'Impresión 3D Paraná',
     'Impresión 3D Entre Ríos',
+    'Impresión 3D Santa Fe',
+    'Prototipado rápido Paraná',
+    'Repuestos 3D a medida',
+    'Piezas discontinuadas 3D',
+    'Servicio de diseño 3D',
     'Trío 3D',
     'Trío 3D Paraná',
-    'Impresiones 3D personalizadas',
     'Coronel Uzin 1216',
-    'Llaveros 3D',
-    'Decoración 3D',
-    'Soportes Auriculares 3D',
+    'Impresión 3D FDM',
+    'Impresión 3D Resina',
     'Macetas Voronoi',
+    'Llaveros personalizados 3D',
     'Litofanías 3D',
-    'Diseño a medida',
-    'PLA',
-    'PETG',
-    'Argentina'
+    'Diseño CAD Argentina'
   ],
-  authors: [{ name: 'Trío 3D' }],
-  creator: 'Trío 3D',
-  publisher: 'Trío 3D',
+  authors: [{ name: 'Trío 3D Studio' }],
+  creator: 'Trío 3D Studio',
+  publisher: 'Trío 3D Studio',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -44,16 +45,16 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
-    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos: llaveros, decoración, soportes gamer, macetas y proyectos a medida.',
-    url: 'https://trio3d.com',
+    title: 'Trío 3D | Servicio de Impresión 3D en Paraná, Entre Ríos',
+    description: 'Impresión 3D profesional, prototipado rápido y diseño de repuestos a medida en Paraná, Santa Fe y todo Entre Ríos.',
+    url: 'https://trio-3d.beenedetich.workers.dev',
     siteName: 'Trío 3D Studio',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Trío 3D Studio - Impresión 3D Personalizada en Paraná',
+        alt: 'Trío 3D Studio - Servicio de Impresión 3D en Paraná',
       },
       {
         url: '/images/logo.png',
@@ -67,8 +68,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Trío 3D | Impresión 3D Personalizada en Paraná, Entre Ríos',
-    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos.',
+    title: 'Trío 3D | Impresión 3D y Prototipado en Paraná, Entre Ríos',
+    description: 'Impresiones 3D personalizadas, repuestos técnicos y prototipado rápido en Paraná y Entre Ríos.',
     images: ['/og-image.png'],
   },
   robots: {
@@ -76,7 +77,7 @@ export const metadata: Metadata = {
     follow: true,
   },
   alternates: {
-    canonical: 'https://trio3d.com',
+    canonical: 'https://trio-3d.beenedetich.workers.dev',
   },
   verification: {
     google: 'googleb5fdec3ac2e0efaf',
@@ -90,22 +91,57 @@ export default function RootLayout({
 }) {
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: 'Trío 3D',
-    image: 'https://trio3d.com/og-image.png',
-    logo: 'https://trio3d.com/images/logo.png',
-    description: 'Impresiones 3D personalizadas de alta calidad en Paraná, Entre Ríos.',
+    '@type': ['LocalBusiness', '3DPrintingService'],
+    name: 'Trío 3D Studio',
+    image: 'https://trio-3d.beenedetich.workers.dev/og-image.png',
+    logo: 'https://trio-3d.beenedetich.workers.dev/images/logo.png',
+    description: 'Servicio profesional de impresión 3D, prototipado rápido, repuestos técnicos a medida y diseño CAD 3D en Paraná, Entre Ríos y Santa Fe.',
     priceRange: '$$',
     address: {
       '@type': 'PostalAddress',
       streetAddress: 'Coronel Uzin 1216',
       addressLocality: 'Paraná',
       addressRegion: 'Entre Ríos',
+      postalCode: '3100',
       addressCountry: 'AR',
     },
-    openingHours: 'Mo-Sa 09:00-20:00',
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: -31.73197,
+      longitude: -60.5238,
+    },
+    hasMap: 'https://maps.google.com/?q=Coronel+Uzin+1216+Parana+Entre+Rios',
+    areaServed: [
+      { '@type': 'City', name: 'Paraná' },
+      { '@type': 'City', name: 'Santa Fe' },
+      { '@type': 'City', name: 'Oro Verde' },
+      { '@type': 'City', name: 'San Benito' },
+      { '@type': 'City', name: 'Colonia Avellaneda' },
+      { '@type': 'City', name: 'Crespo' },
+      { '@type': 'City', name: 'Diamante' },
+      { '@type': 'City', name: 'Victoria' },
+      { '@type': 'City', name: 'Concordia' },
+      { '@type': 'City', name: 'Gualeguaychú' },
+      { '@type': 'AdministrativeArea', name: 'Entre Ríos' },
+    ],
+    knowsAbout: [
+      'Impresión 3D FDM',
+      'Impresión 3D Resina SLA',
+      'Prototipado Rápido',
+      'Diseño 3D CAD',
+      'Repuestos Descontinuados',
+      'Piezas de Ingenería'
+    ],
+    openingHoursSpecification: [
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        opens: '09:00',
+        closes: '20:00',
+      },
+    ],
     telephone: '+5493434381991',
-    url: 'https://trio3d.com',
+    url: 'https://trio-3d.beenedetich.workers.dev',
     sameAs: [
       'https://www.instagram.com/trio3d.parana',
     ],

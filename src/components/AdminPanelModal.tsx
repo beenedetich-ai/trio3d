@@ -836,55 +836,55 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
             <>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-white/10 bg-neutral-900/30 px-6 gap-2 pt-3">
+          <div className="flex overflow-x-auto scrollbar-none whitespace-nowrap border-b border-white/10 bg-neutral-900/30 px-3 sm:px-6 gap-1.5 sm:gap-2 pt-3">
             <button
               onClick={() => {
                 resetForm();
                 setActiveTab('create');
               }}
-              className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-2 ${
+              className={`shrink-0 whitespace-nowrap px-3.5 sm:px-5 py-2.5 sm:py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-1.5 sm:gap-2 ${
                 activeTab === 'create'
                   ? 'bg-neutral-950 text-white border-t-2 border-brand-500'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Plus className="w-4 h-4 text-brand-500" />
+              <Plus className="w-4 h-4 text-brand-500 shrink-0" />
               <span>{editingId ? 'Editar Producto' : 'Cargar Nuevo Producto'}</span>
             </button>
 
             <button
               onClick={() => setActiveTab('list')}
-              className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-2 ${
+              className={`shrink-0 whitespace-nowrap px-3.5 sm:px-5 py-2.5 sm:py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-1.5 sm:gap-2 ${
                 activeTab === 'list'
                   ? 'bg-neutral-950 text-white border-t-2 border-brand-500'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Edit2 className="w-4 h-4 text-brand-500" />
+              <Edit2 className="w-4 h-4 text-brand-500 shrink-0" />
               <span>Gestionar Catálogo ({products.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('export')}
-              className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-2 ${
+              className={`shrink-0 whitespace-nowrap px-3.5 sm:px-5 py-2.5 sm:py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-1.5 sm:gap-2 ${
                 activeTab === 'export'
                   ? 'bg-neutral-950 text-white border-t-2 border-brand-500'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Download className="w-4 h-4 text-brand-500" />
+              <Download className="w-4 h-4 text-brand-500 shrink-0" />
               <span>Exportar Datos</span>
             </button>
 
             <button
               onClick={() => setActiveTab('mercadolibre')}
-              className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-2 ${
+              className={`shrink-0 whitespace-nowrap px-3.5 sm:px-5 py-2.5 sm:py-3 text-xs font-bold rounded-t-xl transition-colors flex items-center gap-1.5 sm:gap-2 ${
                 activeTab === 'mercadolibre'
                   ? 'bg-neutral-950 text-amber-400 border-t-2 border-amber-500'
                   : 'text-neutral-400 hover:text-amber-400'
               }`}
             >
-              <ShieldCheck className="w-4 h-4 text-amber-500" />
+              <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
               <span>Mercado Libre</span>
             </button>
           </div>
@@ -1691,30 +1691,30 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
             {activeTab === 'mercadolibre' && (
               <div className="space-y-6">
                 {/* Sub-tabs bar */}
-                <div className="flex border-b border-white/10 pb-3 gap-3">
+                <div className="flex overflow-x-auto scrollbar-none whitespace-nowrap border-b border-white/10 pb-3 gap-2 sm:gap-3">
                   <button
                     type="button"
                     onClick={() => setMeliSubTab('publications')}
-                    className={`px-4 py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                    className={`shrink-0 whitespace-nowrap px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
                       meliSubTab === 'publications'
                         ? 'bg-amber-500 text-neutral-950 shadow-lg shadow-amber-500/20'
                         : 'bg-neutral-900 text-neutral-400 hover:text-white border border-white/10'
                     }`}
                   >
-                    <PackageCheck className="w-4 h-4" />
+                    <PackageCheck className="w-4 h-4 shrink-0" />
                     <span>Publicaciones Mercado Libre</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setMeliSubTab('config')}
-                    className={`px-4 py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                    className={`shrink-0 whitespace-nowrap px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-extrabold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
                       meliSubTab === 'config'
                         ? 'bg-amber-500 text-neutral-950 shadow-lg shadow-amber-500/20'
                         : 'bg-neutral-900 text-neutral-400 hover:text-white border border-white/10'
                     }`}
                   >
-                    <ShieldCheck className="w-4 h-4" />
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
                     <span>Configuración & OAuth</span>
                   </button>
                 </div>
@@ -2391,7 +2391,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                         setItemTargetCategories({ ...itemTargetCategories, [consolidated.id]: newCat });
                                         setItemTargetSubcategories({ ...itemTargetSubcategories, [consolidated.id]: '' });
                                       }}
-                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none focus:border-amber-400 truncate max-w-[170px]"
+                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-amber-300 font-bold focus:outline-none focus:border-amber-400 truncate max-w-[130px] sm:max-w-[170px]"
                                     >
                                       <option value="auto">Auto ({consolidated.category_name || 'ML'})</option>
                                       {categories.filter((c) => c !== 'Todos').map((c) => (
@@ -2407,7 +2407,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                     <select
                                       value={itemTargetSubcategories[consolidated.id] || targetWebSubcategory}
                                       onChange={(e) => setItemTargetSubcategories({ ...itemTargetSubcategories, [consolidated.id]: e.target.value })}
-                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-pink-300 font-bold focus:outline-none focus:border-pink-400 truncate max-w-[170px]"
+                                      className="bg-neutral-950 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-pink-300 font-bold focus:outline-none focus:border-pink-400 truncate max-w-[130px] sm:max-w-[170px]"
                                     >
                                       <option value="">Sin Subcategoría</option>
                                       {((itemTargetCategories[consolidated.id] && itemTargetCategories[consolidated.id] !== 'auto')

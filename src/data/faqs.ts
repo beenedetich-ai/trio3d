@@ -6,31 +6,31 @@ export interface FAQ {
 
 export const FAQS: FAQ[] = [
   {
-    question: "¿Qué materiales utilizan para las impresiones 3D?",
-    answer: "Utilizamos materiales de primera calidad según el uso de la pieza: PLA ecológico y biodegradable (ideal para decoración, regalos y figuras) y PETG ultra resistente e impermeable (para soportes, exterior y piezas de uso diario)."
+    question: "¿Dónde puedo retirar mi impresión 3D en Paraná?",
+    answer: "Podés retirar tu pedido sin costo adicional por nuestro taller ubicado en Coronel Uzin 1216, Paraná, Entre Ríos. Coordinamos el horario de retiro previamente por WhatsApp para tu mayor comodidad."
   },
   {
-    question: "¿Cómo solicito un presupuesto personalizado por WhatsApp?",
-    answer: "¡Es super simple! Haces clic en el botón de WhatsApp, nos contás tu idea o nos enviás una foto/archivo .STL. Si no tenés archivo 3D, nuestro equipo de diseño lo crea por vos. Te enviamos la cotización con tiempos de entrega en menos de 30 minutos."
+    question: "¿Realizan envíos a Santa Fe y municipios de Entre Ríos?",
+    answer: "Sí, enviamos diariamente a Santa Fe Capital (vía túnel subfluvial), Oro Verde, San Benito, Colonia Avellaneda, Crespo, Diamante, Victoria, Concordia, Gualeguaychú y todo Entre Ríos a través de correo express y cadetería local con embalaje reforzado."
   },
   {
-    question: "¿Realizan envíos a todo el país?",
-    answer: "Sí, realizamos envíos a todo el país mediante correo express y encomienda con embalaje reforzado anti-impacto. También podés retirar sin cargo por nuestro punto de retiro."
+    question: "¿Pueden fabricar o copiar un repuesto roto que no consigo en Paraná?",
+    answer: "¡Es nuestra especialidad! Si se te rompió un engranaje, traba, buje, perilla o carcasa de electrodoméstico o auto que ya no se consigue comercialmente en la zona, nos traés o enviás foto/medidas de la pieza rota. La digitalizamos en CAD 3D y la imprimimos en materiales técnicos de alta resistencia como PETG o Resina."
   },
   {
-    question: "¿Tienen un pedido mínimo de piezas?",
-    answer: "No, imprimimos desde 1 sola pieza personalizada hasta tandas mayoristas para empresas o eventos. Cuantas más unidades solicites del mismo modelo, mayor es el descuento por volumen."
+    question: "¿Qué archivos de diseño 3D aceptan para cotizar?",
+    answer: "Aceptamos archivos en formatos .STL, .OBJ, .STEP, .3MF o planos en .PDF. Si no tenés el archivo 3D, ¡no te preocupes! Nos enviás fotos con las medidas o un boceto y nuestro equipo de diseñadores modela la pieza desde cero."
   },
   {
-    question: "¿Pueden diseñar una pieza que se me rompió o no consigo?",
-    answer: "¡Absolutamente! Es uno de nuestros servicios estrella en 'Diseño a medida'. Nos enviás la pieza rota o las medidas, la modelamos en software 3D profesional y la imprimimos en un material técnico resistente como PETG."
+    question: "¿Qué materiales utilizan y para qué sirve cada uno?",
+    answer: "Utilizamos filamentos y resinas de primera calidad: PLA ecológico (ideal para figuras, decoración, regalos y mates), PETG ultra resistente e impermeable (perfecto para soportes, piezas mecánicas y repuestos de uso rudo) y Resina SLA (para acabados de ultra precisión y detalles microscópicos)."
   },
   {
-    question: "¿Cuáles son los tiempos de fabricación y entrega?",
-    answer: "Las piezas de catálogo en stock o impresiones estándar tardan entre 24 y 48 hs hábiles en fabricarse. Proyectos grandes o diseños a medida toman entre 3 a 5 días hábiles."
+    question: "¿Cuáles son los tiempos de fabricación en Paraná?",
+    answer: "Las impresiones estándar y productos de catálogo se fabrican en 24 a 48 horas hábiles. Para prototipos industriales urgentes o tandas mayoristas coordinamos entregas prioritarias."
   },
   {
     question: "¿Qué medios de pago aceptan?",
-    answer: "Aceptamos Transferencia bancaria, Mercado Pago (débito, crédito, dinero en cuenta), y tarjetas de crédito."
+    answer: "Aceptamos Transferencia Bancaria, Mercado Pago (débito, crédito, dinero en cuenta), y efectivo al retirar en Coronel Uzin 1216, Paraná."
   }
 ];

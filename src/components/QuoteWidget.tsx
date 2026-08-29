@@ -35,15 +35,15 @@ export const QuoteWidget: React.FC = () => {
     });
 
     const priceEst = getEstimatedPrice().toLocaleString('es-AR');
-    let message = `¡Hola Trío 3D! Usé la calculadora web y quisiera cotizar un proyecto:\n`;
+    let message = `¡Hola Trío 3D (Paraná)! Usé la calculadora web y quisiera cotizar un proyecto:\n`;
     message += `• Material: ${material}\n`;
     message += `• Tamaño estimado: ${size.toUpperCase()}\n`;
     message += `• Relleno (Infill): ${infill}%\n`;
-    if (description) message += `• Descripción de la idea: ${description}\n`;
-    message += `• Estimación web aproximada: $${priceEst}\n`;
-    message += `¿Me ayudan a confirmarlo e iniciar la impresión?`;
+    if (description) message += `• Descripción / Repuesto / Proyecto: ${description}\n`;
+    message += `• Estimación orientativa: $${priceEst}\n`;
+    message += `¿Me ayudan a confirmarlo y consultar tiempo de entrega en Paraná / Entre Ríos?`;
 
-    window.open(`https://wa.me/5491123456789?text=${encodeURIComponent(message)}`, '_blank');
+    window.open(`https://wa.me/5493434381991?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   return (

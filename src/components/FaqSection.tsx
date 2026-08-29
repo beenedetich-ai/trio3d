@@ -13,12 +13,29 @@ export const FaqSection: React.FC = () => {
   };
 
   const handleWhatsAppClick = () => {
-    const message = encodeURIComponent('¡Hola Trío 3D! Tengo una pregunta sobre impresiones 3D que no vi en las FAQ.');
+    const message = encodeURIComponent('¡Hola Trío 3D! Tengo una pregunta sobre impresiones 3D en Paraná que no vi en las FAQ.');
     window.open(`https://wa.me/5493434381991?text=${message}`, '_blank');
+  };
+
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQS.map((faq) => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
   };
 
   return (
     <section id="faq" className="py-28 bg-dark-bg relative overflow-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <motion.div

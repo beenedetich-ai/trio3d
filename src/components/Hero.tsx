@@ -58,7 +58,7 @@ export const Hero: React.FC = () => {
         <motion.div variants={itemVariants}>
           <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-amber-500/10 border border-pink-500/30 text-pink-300 text-xs sm:text-sm font-semibold mb-8 shadow-2xl backdrop-blur-xl animate-pulse-glow">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Impresión 3D de Alta Precisión & Diseños Exclusivos</span>
+            <span>📍 Servicio de Impresión 3D & Prototipado en Paraná, Entre Ríos</span>
           </div>
         </motion.div>
 
@@ -67,19 +67,19 @@ export const Hero: React.FC = () => {
           variants={itemVariants}
           className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white tracking-tight leading-[1.08] max-w-5xl"
         >
-          Convertimos tus{' '}
+          Impresión 3D y{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-amber-400 trio-glow-text">
-            ideas
+            Prototipado
           </span>{' '}
-          en realidad 3D
+          en Paraná y Entre Ríos
         </motion.h1>
 
         {/* Subtitle */}
         <motion.p
           variants={itemVariants}
-          className="mt-6 text-lg sm:text-xl md:text-2xl text-neutral-300 max-w-3xl font-light leading-relaxed"
+          className="mt-6 text-lg sm:text-xl md:text-2xl text-neutral-300 max-w-4xl font-light leading-relaxed"
         >
-          Desde figuras personalizadas y regalos emotivos hasta llaveros, soportes útiles y decoración exclusiva de alta definición.
+          Fabricación digital de alta definición. Desde repuestos técnicos a medida y prototipos industriales hasta llaveros, soportes gamer y piezas exclusivas. Retiro por <strong className="font-semibold text-white">Coronel Uzin 1216 (Paraná)</strong> o envíos a todo Entre Ríos y Santa Fe.
         </motion.p>
 
         {/* CTA Buttons */}
