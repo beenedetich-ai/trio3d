@@ -658,83 +658,112 @@ export class MercadoLibreService {
     const currentUser = await this.getCurrentUser(accessToken);
     const userId = currentUser.id;
 
-    // 2. Definir parámetros de consulta
-    const baseParams = new URLSearchParams();
-    baseParams.append('limit', '50');
-
-    if (filters.status && filters.status !== 'all') {
-      baseParams.append('status', filters.status);
-    }
-
-    if (filters.query && filters.query.trim()) {
-      baseParams.append('q', filters.query.trim());
-    }
-
-    const paramsWithToken = new URLSearchParams(baseParams);
-    paramsWithToken.append('access_token', accessToken);
-
-    // Tres intentos estratégicos para asegurar compatibilidad CORS y endpoints CBT/Marketplace
-    const attempts: Array<{ url: string; headers: Record<string, string>; description: string }> = [
-      {
-        url: `https://api.mercadolibre.com/users/${userId}/items/search?${paramsWithToken.toString()}`,
-        headers: {},
-        description: `/users/${userId}/items/search?access_token=... (Query Token)`,
-      },
-      {
-        url: `https://api.mercadolibre.com/marketplace/users/${userId}/items/search?${paramsWithToken.toString()}`,
-        headers: {},
-        description: `/marketplace/users/${userId}/items/search?access_token=... (Marketplace Query Token)`,
-      },
-      {
-        url: `https://api.mercadolibre.com/users/${userId}/items/search?${baseParams.toString()}`,
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        description: `/users/${userId}/items/search (Bearer Header)`,
-      },
-    ];
-
-    let itemIds: string[] = [];
+    // 2. Definir parámetros de consulta y paginar para traer todas las publicaciones (más recientes primero)
+    const allItemIds: string[] = [];
     const debugAttempts: any[] = [];
     let lastSuccessfulRawJson: any = null;
+    let offset = 0;
+    const pageLimit = 50;
+    const maxItemsToFetch = 500;
+    let hasMorePages = true;
 
-    for (const attempt of attempts) {
-      try {
-        const reqHeaders: Record<string, string> = {
-          'Accept': 'application/json',
-          ...attempt.headers,
-        };
+    while (hasMorePages && allItemIds.length < maxItemsToFetch) {
+      const baseParams = new URLSearchParams();
+      baseParams.append('limit', String(pageLimit));
+      baseParams.append('offset', String(offset));
+      baseParams.append('orders', 'start_time_desc');
 
-        const res = await fetch(attempt.url, {
-          method: 'GET',
-          headers: reqHeaders,
-        });
+      if (filters.status && filters.status !== 'all') {
+        baseParams.append('status', filters.status);
+      }
 
+      if (filters.query && filters.query.trim()) {
+        baseParams.append('q', filters.query.trim());
+      }
 
-        const resData = await res.json().catch(() => null);
+      const paramsWithToken = new URLSearchParams(baseParams);
+      paramsWithToken.append('access_token', accessToken);
 
-        debugAttempts.push({
-          attempt: attempt.description,
-          url: attempt.url,
-          status: res.status,
-          statusText: res.statusText,
-          ok: res.ok,
-          responseJson: resData,
-        });
+      // Tres intentos estratégicos para asegurar compatibilidad CORS y endpoints CBT/Marketplace
+      const attempts: Array<{ url: string; headers: Record<string, string>; description: string }> = [
+        {
+          url: `https://api.mercadolibre.com/users/${userId}/items/search?${paramsWithToken.toString()}`,
+          headers: {},
+          description: `/users/${userId}/items/search?access_token=... (Query Token)`,
+        },
+        {
+          url: `https://api.mercadolibre.com/marketplace/users/${userId}/items/search?${paramsWithToken.toString()}`,
+          headers: {},
+          description: `/marketplace/users/${userId}/items/search?access_token=... (Marketplace Query Token)`,
+        },
+        {
+          url: `https://api.mercadolibre.com/users/${userId}/items/search?${baseParams.toString()}`,
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          description: `/users/${userId}/items/search (Bearer Header)`,
+        },
+      ];
 
-        if (res.ok && resData) {
-          lastSuccessfulRawJson = resData;
-          if (resData.results && Array.isArray(resData.results)) {
-            itemIds = resData.results;
-            if (itemIds.length > 0) break;
+      let pageIds: string[] = [];
+      let totalReported = 0;
+
+      for (const attempt of attempts) {
+        try {
+          const reqHeaders: Record<string, string> = {
+            'Accept': 'application/json',
+            ...attempt.headers,
+          };
+
+          const res = await fetch(attempt.url, {
+            method: 'GET',
+            headers: reqHeaders,
+          });
+
+          const resData = await res.json().catch(() => null);
+
+          if (offset === 0) {
+            debugAttempts.push({
+              attempt: attempt.description,
+              url: attempt.url,
+              status: res.status,
+              statusText: res.statusText,
+              ok: res.ok,
+              responseJson: resData,
+            });
+          }
+
+          if (res.ok && resData) {
+            lastSuccessfulRawJson = resData;
+            if (resData.paging && typeof resData.paging.total === 'number') {
+              totalReported = resData.paging.total;
+            }
+            if (resData.results && Array.isArray(resData.results)) {
+              pageIds = resData.results;
+              if (pageIds.length > 0) break;
+            }
+          }
+        } catch (err: any) {
+          if (offset === 0) {
+            debugAttempts.push({
+              attempt: attempt.description,
+              url: attempt.url,
+              error: err.message || String(err),
+            });
           }
         }
-      } catch (err: any) {
-        debugAttempts.push({
-          attempt: attempt.description,
-          url: attempt.url,
-          error: err.message || String(err),
-        });
+      }
+
+      if (pageIds.length > 0) {
+        allItemIds.push(...pageIds);
+        offset += pageIds.length;
+        if (pageIds.length < pageLimit || (totalReported > 0 && offset >= totalReported)) {
+          hasMorePages = false;
+        }
+      } else {
+        hasMorePages = false;
       }
     }
+
+    const itemIds = allItemIds;
 
     // Guardar registro de depuración para inspección en tiempo real de JSON crudo
     this.lastRawDebugInfo = {
@@ -763,48 +792,63 @@ export class MercadoLibreService {
       return [];
     }
 
-    // 3. Obtener detalles completos de publicaciones (/items/{id} o multiget /items?ids=...)
+    // 3. Obtener detalles completos de todas las publicaciones en lotes de 20 (recomendado por API ML)
     const publications: MeliPublicationItem[] = [];
+    const chunkSize = 20;
+    const idChunks: string[][] = [];
 
-    // Multiget masivo con access_token en query string
-    try {
-      const multigetUrl = `https://api.mercadolibre.com/items?ids=${itemIds.slice(0, 50).join(',')}&access_token=${encodeURIComponent(accessToken)}`;
-      const multigetRes = await fetch(multigetUrl);
-      if (multigetRes.ok) {
-        const multigetJson = await multigetRes.json();
-        if (Array.isArray(multigetJson)) {
-          for (const entry of multigetJson) {
-            if (entry.code === 200 && entry.body) {
-              const body = entry.body;
-              const categoryName = await this.getCategoryName(body.category_id);
-              const desc = await MercadoLibreService.getItemDescription(body.id, accessToken);
-              publications.push({
-                id: body.id,
-                title: body.title,
-                price: Number(body.price) || 0,
-                currency_id: body.currency_id || 'ARS',
-                status: body.status || 'active',
-                thumbnail: body.secure_thumbnail || body.thumbnail || body.pictures?.[0]?.secure_url || body.pictures?.[0]?.url || '',
-                pictures: body.pictures || [{ url: body.thumbnail }],
-                category_id: body.category_id,
-                category_name: categoryName,
-                date_created: body.date_created,
-                last_updated: body.last_updated,
-                permalink: body.permalink,
-                listing_type_id: body.listing_type_id || 'gold_special',
-                free_shipping: Boolean(body.shipping?.free_shipping),
-                description: desc,
-                attributes: body.attributes || [],
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Fallo multiget /items:', e);
+    for (let i = 0; i < itemIds.length; i += chunkSize) {
+      idChunks.push(itemIds.slice(i, i + chunkSize));
     }
 
-    // Si multiget no trajo publicaciones, consultar individualmente /items/${id}
+    try {
+      const chunkPromises = idChunks.map(async (chunk) => {
+        const multigetUrl = `https://api.mercadolibre.com/items?ids=${chunk.join(',')}&access_token=${encodeURIComponent(accessToken)}`;
+        const multigetRes = await fetch(multigetUrl);
+        if (multigetRes.ok) {
+          const multigetJson = await multigetRes.json();
+          if (Array.isArray(multigetJson)) {
+            const parsedItems: MeliPublicationItem[] = [];
+            for (const entry of multigetJson) {
+              if (entry.code === 200 && entry.body) {
+                const body = entry.body;
+                const categoryName = await this.getCategoryName(body.category_id);
+                const desc = await MercadoLibreService.getItemDescription(body.id, accessToken);
+                parsedItems.push({
+                  id: body.id,
+                  title: body.title,
+                  price: Number(body.price) || 0,
+                  currency_id: body.currency_id || 'ARS',
+                  status: body.status || 'active',
+                  thumbnail: body.secure_thumbnail || body.thumbnail || body.pictures?.[0]?.secure_url || body.pictures?.[0]?.url || '',
+                  pictures: body.pictures || [{ url: body.thumbnail }],
+                  category_id: body.category_id,
+                  category_name: categoryName,
+                  date_created: body.date_created,
+                  last_updated: body.last_updated,
+                  permalink: body.permalink,
+                  listing_type_id: body.listing_type_id || 'gold_special',
+                  free_shipping: Boolean(body.shipping?.free_shipping),
+                  description: desc,
+                  attributes: body.attributes || [],
+                });
+              }
+            }
+            return parsedItems;
+          }
+        }
+        return [];
+      });
+
+      const chunkResults = await Promise.all(chunkPromises);
+      for (const batch of chunkResults) {
+        publications.push(...batch);
+      }
+    } catch (e) {
+      console.warn('Fallo multiget en lotes /items:', e);
+    }
+
+    // Si multiget masivo no trajo publicaciones, consultar individualmente como fallback
     if (publications.length === 0) {
       const detailPromises = itemIds.slice(0, 50).map(async (itemId) => {
         const itemUrls = [

@@ -332,7 +332,12 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
       });
 
       MercadoLibreService.getTokensFromSupabase().then((toks) => {
-        if (toks) setMeliTokens(toks);
+        if (toks) {
+          setMeliTokens(toks);
+          if (toks.access_token && meliPublications.length === 0) {
+            handleFetchMeliPublications();
+          }
+        }
         setIsMeliLoaded(true);
       });
     }
