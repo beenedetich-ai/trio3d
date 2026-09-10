@@ -10,12 +10,21 @@ import { MeliPublicationItem } from '@/services/mercadoLibreService';
 import { Product, ProductVariant } from '@/data/products';
 
 export interface MeliPricingConfig {
-  /** % de comisión cobrada por Mercado Libre en publicaciones Clásicas (def: 14%) */
+  /** Modo de cálculo del precio neto:
+   * 'markup': Descuenta el recargo inverso exacto: Precio / (1 + Recargo/100) (Recomendado si sumaste un recargo a tu precio web para vender en ML)
+   * 'margin': Descuento de retención directa: Precio * (1 - Comision/100) (Si querés el monto exacto neto que ML te liquida en cuenta)
+   */
+  calculationMode: 'markup' | 'margin';
+  /** % de recargo/comisión cobrada por Mercado Libre en publicaciones Clásicas (def: 14%) */
   classicCommissionPercent: number;
-  /** % de comisión cobrada por Mercado Libre en publicaciones Premium (def: 29%, incluye financiación cuotas) */
+  /** % de recargo/comisión cobrada por Mercado Libre en publicaciones Premium (def: 29%, incluye financiación cuotas) */
   premiumCommissionPercent: number;
   /** % adicional de recargo por financiación/cuotas a deducir (si no estuviera en la comisión Premium) */
   financingSurchargePercent: number;
+  /** Si debe deducirse el costo fijo por unidad de Mercado Libre (para ítems < $30.000 / $33.000) */
+  deductFixedFee: boolean;
+  /** Monto de costo fijo por unidad en $ ARS cobrado por ML (ej: $1.500) */
+  fixedFeePerUnit: number;
   /** Si debe deducirse el costo de envío gratis en publicaciones que lo incluyen */
   deductFreeShipping: boolean;
   /** Monto estimado de costo de envío gratis en $ ARS que fue absorbido en la publicación */
@@ -33,9 +42,12 @@ export interface MeliPricingConfig {
 }
 
 export const DEFAULT_MELI_PRICING_CONFIG: MeliPricingConfig = {
+  calculationMode: 'markup',
   classicCommissionPercent: 14,
   premiumCommissionPercent: 29,
   financingSurchargePercent: 0,
+  deductFixedFee: false,
+  fixedFeePerUnit: 1500,
   deductFreeShipping: true,
   estimatedFreeShippingCost: 0,
   buyerSurchargePercent: 0,
@@ -58,9 +70,12 @@ export interface CleanPriceResult {
   totalDeductionPercent: number;
   /** Monto total deducido en $ ARS */
   totalDeductionAmount: number;
+  /** Modo de cálculo aplicado */
+  calculationMode: 'markup' | 'margin';
   /** Desglose detallado de las deducciones */
   breakdown: {
     commissionDeduction: number;
+    fixedFeeDeduction: number;
     financingDeduction: number;
     shippingDeduction: number;
     buyerSurchargeDeduction: number;
@@ -285,9 +300,7 @@ export function calculateCleanPrice(
   const config = { ...DEFAULT_MELI_PRICING_CONFIG, ...customConfig };
   const basePrice = Math.max(0, mlPrice || 0);
 
-  // 1. Determinar porcentaje de comisión por tipo de publicación de Mercado Libre
-  // 'gold_special' = Clásica (comisión estándar)
-  // 'gold_pro' / 'gold_premium' = Premium (incluye costo de cuotas sin interés)
+  // 1. Determinar porcentaje de comisión/recargo según tipo de publicación
   const isPremium = listingTypeId === 'gold_pro' || listingTypeId === 'gold_premium';
   const commissionPercent = isPremium
     ? config.premiumCommissionPercent
@@ -295,47 +308,68 @@ export function calculateCleanPrice(
     ? 0
     : config.classicCommissionPercent;
 
-  // 2. Calcular deducciones
   let currentPrice = basePrice;
-
-  // A. Deducción de Comisión de ML
-  const commissionFactor = Math.max(0, 1 - commissionPercent / 100);
-  const priceAfterCommission = basePrice * commissionFactor;
-  const commissionDeduction = basePrice - priceAfterCommission;
-  currentPrice = priceAfterCommission;
-
-  // B. Deducción de Recargo por Cuotas / Financiación (si aplica por separado)
-  let financingDeduction = 0;
-  if (config.financingSurchargePercent > 0) {
-    const financingFactor = Math.max(0, 1 - config.financingSurchargePercent / 100);
-    const priceAfterFinancing = currentPrice * financingFactor;
-    financingDeduction = currentPrice - priceAfterFinancing;
-    currentPrice = priceAfterFinancing;
-  }
-
-  // C. Deducción de Recargo al Comprador / Gastos Administrativos
-  let buyerSurchargeDeduction = 0;
-  if (config.buyerSurchargePercent > 0) {
-    const buyerFactor = Math.max(0, 1 - config.buyerSurchargePercent / 100);
-    const priceAfterBuyer = currentPrice * buyerFactor;
-    buyerSurchargeDeduction = currentPrice - priceAfterBuyer;
-    currentPrice = priceAfterBuyer;
-  }
-
-  // D. Deducción de Costo de Envío Gratis Integrado (si el producto incluía envío gratis)
+  let fixedFeeDeduction = 0;
   let shippingDeduction = 0;
+
+  // A. Deducción de Costo de Envío Gratis Integrado (si el producto incluía envío gratis absorbido)
   if (hasFreeShipping && config.deductFreeShipping && config.estimatedFreeShippingCost > 0) {
     shippingDeduction = Math.min(currentPrice, config.estimatedFreeShippingCost);
     currentPrice = Math.max(0, currentPrice - shippingDeduction);
   }
 
-  // E. Descuento adicional directo opcional del usuario
+  // B. Deducción de Costo Fijo por Unidad de Mercado Libre (si aplica)
+  if (config.deductFixedFee && config.fixedFeePerUnit > 0) {
+    fixedFeeDeduction = Math.min(currentPrice, config.fixedFeePerUnit);
+    currentPrice = Math.max(0, currentPrice - fixedFeeDeduction);
+  }
+
+  let commissionDeduction = 0;
+  let financingDeduction = 0;
+  let buyerSurchargeDeduction = 0;
+
+  if (config.calculationMode === 'markup') {
+    // MODO RECARGO / MARKUP: Fórmula inversa exacta: P_limpio = P / (1 + Recargo/100)
+    // Descuenta exactamente el recargo que el vendedor le sumó a su precio web para vender en ML
+    const totalSurchargePercent = commissionPercent + config.financingSurchargePercent + config.buyerSurchargePercent;
+    if (totalSurchargePercent > 0) {
+      const divisor = 1 + totalSurchargePercent / 100;
+      const cleanBeforeDiscount = currentPrice / divisor;
+      const totalSurchargeAmount = currentPrice - cleanBeforeDiscount;
+
+      // Desglose proporcional
+      commissionDeduction = totalSurchargePercent > 0 ? totalSurchargeAmount * (commissionPercent / totalSurchargePercent) : 0;
+      financingDeduction = totalSurchargePercent > 0 ? totalSurchargeAmount * (config.financingSurchargePercent / totalSurchargePercent) : 0;
+      buyerSurchargeDeduction = totalSurchargePercent > 0 ? totalSurchargeAmount * (config.buyerSurchargePercent / totalSurchargePercent) : 0;
+
+      currentPrice = cleanBeforeDiscount;
+    }
+  } else {
+    // MODO RETENCIÓN / MARGEN: Deducción porcentual directa: P_limpio = P * (1 - %/100)
+    // Corresponde a lo que ML retiene de la venta
+    const priceBeforeComm = currentPrice;
+    currentPrice = currentPrice * Math.max(0, 1 - commissionPercent / 100);
+    commissionDeduction = priceBeforeComm - currentPrice;
+
+    if (config.financingSurchargePercent > 0) {
+      const priceBeforeFin = currentPrice;
+      currentPrice = currentPrice * Math.max(0, 1 - config.financingSurchargePercent / 100);
+      financingDeduction = priceBeforeFin - currentPrice;
+    }
+
+    if (config.buyerSurchargePercent > 0) {
+      const priceBeforeBuyer = currentPrice;
+      currentPrice = currentPrice * Math.max(0, 1 - config.buyerSurchargePercent / 100);
+      buyerSurchargeDeduction = priceBeforeBuyer - currentPrice;
+    }
+  }
+
+  // C. Descuento adicional directo opcional del usuario
   let customDiscountDeduction = 0;
   if (config.customDiscountPercent > 0) {
-    const customFactor = Math.max(0, 1 - config.customDiscountPercent / 100);
-    const priceAfterCustom = currentPrice * customFactor;
-    customDiscountDeduction = currentPrice - priceAfterCustom;
-    currentPrice = priceAfterCustom;
+    const priceBeforeCustom = currentPrice;
+    currentPrice = currentPrice * Math.max(0, 1 - config.customDiscountPercent / 100);
+    customDiscountDeduction = priceBeforeCustom - currentPrice;
   }
 
   const cleanPrice = Math.round(currentPrice);
@@ -350,8 +384,10 @@ export function calculateCleanPrice(
     listingType: isPremium ? 'Premium (Cuotas)' : listingTypeId === 'gold_special' ? 'Clásica' : listingTypeId,
     totalDeductionPercent,
     totalDeductionAmount,
+    calculationMode: config.calculationMode,
     breakdown: {
       commissionDeduction: Math.round(commissionDeduction),
+      fixedFeeDeduction: Math.round(fixedFeeDeduction),
       financingDeduction: Math.round(financingDeduction),
       shippingDeduction: Math.round(shippingDeduction),
       buyerSurchargeDeduction: Math.round(buyerSurchargeDeduction),
@@ -486,7 +522,16 @@ export function sanitizeMeliDescription(rawDescription: string, productTitle?: s
 }
 
 /**
- * Normaliza el título de una publicación para agrupar ítems idénticos
+ * Expresión regular para identificar y extraer variantes de color y terminaciones frecuentes
+ */
+export const COLOR_VARIANTS_REGEX = /\b(color\s+)?(blanco|negro|gris|rojo|marr[oó]n(\s+claro)?|azul|verde|amarillo|rosa|naranja|plateado|dorado|multicolor|fino)\b/gi;
+
+/**
+ * Normaliza el título de una publicación para agrupar ítems idénticos:
+ * - Elimina acentos y signos
+ * - Elimina términos de forma de pago y cuotas (ej: "cuotas sin interés", "clásica", "premium", "6 cuotas")
+ * - Elimina beneficios de plataforma (ej: "envío gratis", "oferta", "promo")
+ * - Elimina sufijos de color para consolidar publicaciones separadas por color en variantes de un mismo producto
  */
 export function normalizeTitleForGrouping(title: string): string {
   if (!title) return '';
@@ -494,7 +539,11 @@ export function normalizeTitleForGrouping(title: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\b(clasica|premium|cuotas?|sin|interes|envio|gratis|oferta|promo|pack|combo|descuento)\b/gi, '')
+    // Eliminar formas de pago, cuotas y tipos de publicación
+    .replace(/\b([0-9]+\s*)?(cuotas?|pagos?)\s*(sin\s*interes)?\b/gi, '')
+    .replace(/\b(clasica|premium|sin\s*interes|con\s*interes|envio\s*gratis|envio|gratis|oferta|promo|promocion|pack|combo|descuento)\b/gi, '')
+    // Eliminar variantes de color en el título para consolidar el mismo producto
+    .replace(COLOR_VARIANTS_REGEX, '')
     .replace(/[^a-z0-9]/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -532,7 +581,7 @@ export function findMatchingStoreProduct(
 }
 
 /**
- * Agrupa publicaciones de Mercado Libre duplicadas o con variantes (ej: Clásica vs Premium)
+ * Agrupa publicaciones de Mercado Libre duplicadas o con variantes (ej: Clásica vs Premium o publicaciones por color)
  * y calcula el precio neto limpio tomando como base la publicación de MENOR PRECIO.
  * Además, verifica contra el catálogo existente de la tienda web para señalar [NUEVO] o [YA PUBLICADO]
  * y extrae las especificaciones logísticas (peso y dimensiones).
@@ -568,7 +617,9 @@ export function groupAndDeduplicateMeliPublications(
         lowestBasePrice: item.price,
         lowestPriceItem: item,
         cleanPriceResult,
-        pictures: item.pictures.map((p) => ({ url: p.url })),
+        pictures: item.pictures.map((p) => ({
+          url: (p.secure_url || p.url || '').replace(/^http:\/\//i, 'https://').replace(/-I\.(jpg|webp)$/i, '-O.$1'),
+        })),
         groupedItems: [item],
         meli_ids: [item.id],
         variants: [],
@@ -583,7 +634,7 @@ export function groupAndDeduplicateMeliPublications(
 
   const groupsMap = new Map<string, MeliPublicationItem[]>();
 
-  // 1. Agrupar publicaciones por título normalizado
+  // 1. Agrupar publicaciones por título normalizado (unifica Clásica vs Premium y publicaciones por color)
   for (const item of items) {
     const normKey = normalizeTitleForGrouping(item.title);
     const key = normKey.length >= 4 ? normKey : item.id;
@@ -610,45 +661,92 @@ export function groupAndDeduplicateMeliPublications(
       config
     );
 
-    // C. Sanitizar el título principal
-    const cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(lowestItem.title) : lowestItem.title;
+    // C. Sanitizar el título principal (si hay varias publicaciones agrupadas, remover el color del título para que sea genérico)
+    let cleanTitle = config.sanitizeTitle ? sanitizeMeliTitle(lowestItem.title) : lowestItem.title;
+    if (groupItems.length > 1) {
+      cleanTitle = cleanTitle
+        .replace(new RegExp('\\s*[-–—|/]?\\s*' + COLOR_VARIANTS_REGEX.source + '\\s*$', 'i'), '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
 
-    // D. Fusionar imágenes de todas las publicaciones del grupo sin duplicados
+    // D. Fusionar todas las imágenes del grupo sin duplicados en calidad HD y forzando HTTPS
     const allPicturesMap = new Map<string, string>();
     groupItems.forEach((item) => {
-      if (item.pictures) {
+      if (item.pictures && Array.isArray(item.pictures)) {
         item.pictures.forEach((pic) => {
-          if (pic.url) allPicturesMap.set(pic.url, pic.url);
+          const rawUrl = (pic.secure_url || pic.url || '').replace(/^http:\/\//i, 'https://').replace(/-I\.(jpg|webp)$/i, '-O.$1');
+          if (rawUrl) {
+            const assetKey = rawUrl.replace(/^https?:\/\//i, '').replace(/[-_][IFOM]\.(jpg|webp)$/i, '');
+            if (!allPicturesMap.has(assetKey)) {
+              allPicturesMap.set(assetKey, rawUrl);
+            }
+          }
         });
       }
-      if (item.thumbnail) allPicturesMap.set(item.thumbnail, item.thumbnail);
+      if (item.thumbnail) {
+        const thumbHd = (item.thumbnail || '').replace(/^http:\/\//i, 'https://').replace(/-I\.(jpg|webp)$/i, '-O.$1');
+        const assetKey = thumbHd.replace(/^https?:\/\//i, '').replace(/[-_][IFOM]\.(jpg|webp)$/i, '');
+        if (thumbHd && !allPicturesMap.has(assetKey)) {
+          allPicturesMap.set(assetKey, thumbHd);
+        }
+      }
     });
-    const combinedPictures = Array.from(allPicturesMap.keys()).map((url) => ({ url }));
+    const combinedPictures = Array.from(allPicturesMap.values()).map((url) => ({ url }));
 
-    // E. Extraer variantes entre publicaciones
+    // E. Extraer variantes entre publicaciones (Color, Opción de Pago y atributos técnicos)
+    const seenVariantKeys = new Set<string>();
     const variants: ProductVariant[] = [];
+
     groupItems.forEach((item) => {
+      // Variantes de color extraídas del título si hay publicaciones por color
+      const colorMatch = item.title.match(COLOR_VARIANTS_REGEX);
+      if (colorMatch && colorMatch.length > 0) {
+        const rawCol = colorMatch[colorMatch.length - 1].trim().replace(/^color\s+/i, '');
+        const colorFormatted = rawCol.charAt(0).toUpperCase() + rawCol.slice(1).toLowerCase();
+        const vKey = `color-${colorFormatted}`;
+        if (!seenVariantKeys.has(vKey)) {
+          seenVariantKeys.add(vKey);
+          variants.push({
+            id: `${item.id}-color`,
+            name: 'Color',
+            value: colorFormatted,
+            price: `$ ${item.price.toLocaleString('es-AR')}`,
+            meli_id: item.id,
+          });
+        }
+      }
+
+      // Variantes de financiación / cuotas si hay Clásica y Premium
       const isPremium = item.listing_type_id === 'gold_pro' || item.listing_type_id === 'gold_premium';
       const variantLabel = isPremium ? 'Opción Cuotas (Premium)' : 'Opción Clásica';
+      const typeKey = `type-${variantLabel}`;
+      if (!seenVariantKeys.has(typeKey) && groupItems.length > 1) {
+        seenVariantKeys.add(typeKey);
+        variants.push({
+          id: `${item.id}-type`,
+          name: 'Opción de Pago',
+          value: `${variantLabel}${item.free_shipping ? ' + Envío Gratis' : ''}`,
+          price: `$ ${item.price.toLocaleString('es-AR')}`,
+          meli_id: item.id,
+        });
+      }
 
-      variants.push({
-        id: item.id,
-        name: groupItems.length > 1 ? 'Versión ML' : 'Variante',
-        value: `${variantLabel}${item.free_shipping ? ' + Envío Gratis' : ''}`,
-        price: `$ ${item.price.toLocaleString('es-AR')}`,
-        meli_id: item.id,
-      });
-
+      // Atributos de ficha técnica
       if (item.attributes && Array.isArray(item.attributes)) {
         item.attributes.forEach((attr) => {
           if (attr.name && attr.value_name && ['Color', 'Talle', 'Tamaño', 'Modelo', 'Material', 'Capacidad'].includes(attr.name)) {
-            variants.push({
-              id: `${item.id}-${attr.id || attr.name}`,
-              name: attr.name,
-              value: attr.value_name,
-              price: `$ ${item.price.toLocaleString('es-AR')}`,
-              meli_id: item.id,
-            });
+            const attrKey = `attr-${attr.name}-${attr.value_name}`;
+            if (!seenVariantKeys.has(attrKey)) {
+              seenVariantKeys.add(attrKey);
+              variants.push({
+                id: `${item.id}-${attr.id || attr.name}`,
+                name: attr.name,
+                value: attr.value_name,
+                price: `$ ${item.price.toLocaleString('es-AR')}`,
+                meli_id: item.id,
+              });
+            }
           }
         });
       }

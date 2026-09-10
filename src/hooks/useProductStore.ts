@@ -107,6 +107,7 @@ export function useProductStore() {
                   alto: item.alto || 10,
                   ancho: item.ancho || 10,
                   largo: item.largo || 10,
+                  meli_id: item.meli_id || null,
                 };
               });
 
@@ -180,7 +181,7 @@ export function useProductStore() {
   const addProduct = async (newProductData: Omit<Product, 'id'>) => {
     const id = `custom-${Date.now()}`;
     const rawImages = newProductData.images && newProductData.images.length > 0
-      ? newProductData.images.slice(0, 5)
+      ? newProductData.images
       : [newProductData.image || '/images/soportes.png'];
     const rawSubcats = newProductData.subcategories && newProductData.subcategories.length > 0
       ? newProductData.subcategories
@@ -218,6 +219,7 @@ export function useProductStore() {
           alto: newProduct.alto || 10,
           ancho: newProduct.ancho || 10,
           largo: newProduct.largo || 10,
+          meli_id: newProduct.meli_id || null,
         };
 
         const { error } = await supabase.from('products').insert([payload]);

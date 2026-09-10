@@ -569,6 +569,61 @@ export class MercadoLibreService {
   }
 
   /**
+   * Extrae todas las imágenes disponibles de la publicación en alta resolución y HTTPS,
+   * combinando body.pictures, imágenes de variantes (picture_ids) y miniaturas.
+   */
+  public static extractAllPictures(body: any): Array<{ id?: string; url: string; secure_url?: string }> {
+    const picturesMap = new Map<string, { id?: string; url: string; secure_url?: string }>();
+
+    // 1. Extraer del array principal body.pictures
+    if (Array.isArray(body.pictures)) {
+      for (const pic of body.pictures) {
+        const rawUrl = (pic.secure_url || pic.url || '').replace(/^http:\/\//i, 'https://').replace(/-I\.(jpg|webp)$/i, '-O.$1');
+        if (rawUrl) {
+          const assetKey = rawUrl.replace(/^https?:\/\//i, '').replace(/[-_][IFOM]\.(jpg|webp)$/i, '');
+          if (!picturesMap.has(assetKey)) {
+            picturesMap.set(assetKey, {
+              id: pic.id,
+              url: rawUrl,
+              secure_url: rawUrl,
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Extraer fotos asociadas a variantes (picture_ids)
+    if (Array.isArray(body.variations)) {
+      for (const variation of body.variations) {
+        if (Array.isArray(variation.picture_ids)) {
+          for (const picId of variation.picture_ids) {
+            if (!picturesMap.has(picId)) {
+              const varUrl = `https://http2.mlstatic.com/D_NQ_NP_${picId}-O.webp`;
+              picturesMap.set(picId, {
+                id: picId,
+                url: varUrl,
+                secure_url: varUrl,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fallback si no se encontró ninguna imagen en pictures ni en variations
+    if (picturesMap.size === 0) {
+      const thumbUrl = (body.secure_thumbnail || body.thumbnail || '')
+        .replace(/^http:\/\//i, 'https://')
+        .replace(/-I\.(jpg|webp)$/i, '-O.$1');
+      if (thumbUrl) {
+        picturesMap.set('thumb', { url: thumbUrl, secure_url: thumbUrl });
+      }
+    }
+
+    return Array.from(picturesMap.values());
+  }
+
+  /**
    * Obtiene los datos del usuario autenticado actual.
    * Revisa primero si ya tenemos el user_id guardado en las credenciales/tokens para evitar bloqueos de CORS en el navegador.
    */
@@ -814,14 +869,17 @@ export class MercadoLibreService {
                 const body = entry.body;
                 const categoryName = await this.getCategoryName(body.category_id);
                 const desc = await MercadoLibreService.getItemDescription(body.id, accessToken);
+                const extractedPics = MercadoLibreService.extractAllPictures(body);
+                const mainThumb = extractedPics[0]?.secure_url || extractedPics[0]?.url || (body.secure_thumbnail || body.thumbnail || '').replace(/^http:\/\//i, 'https://');
+
                 parsedItems.push({
                   id: body.id,
                   title: body.title,
                   price: Number(body.price) || 0,
                   currency_id: body.currency_id || 'ARS',
                   status: body.status || 'active',
-                  thumbnail: body.secure_thumbnail || body.thumbnail || body.pictures?.[0]?.secure_url || body.pictures?.[0]?.url || '',
-                  pictures: body.pictures || [{ url: body.thumbnail }],
+                  thumbnail: mainThumb,
+                  pictures: extractedPics,
                   category_id: body.category_id,
                   category_name: categoryName,
                   date_created: body.date_created,
@@ -866,14 +924,17 @@ export class MercadoLibreService {
               const body = await itemRes.json();
               const categoryName = await this.getCategoryName(body.category_id);
               const desc = await MercadoLibreService.getItemDescription(body.id, accessToken);
+              const extractedPics = MercadoLibreService.extractAllPictures(body);
+              const mainThumb = extractedPics[0]?.secure_url || extractedPics[0]?.url || (body.secure_thumbnail || body.thumbnail || '').replace(/^http:\/\//i, 'https://');
+
               return {
                 id: body.id,
                 title: body.title,
                 price: Number(body.price) || 0,
                 currency_id: body.currency_id || 'ARS',
                 status: body.status || 'active',
-                thumbnail: body.secure_thumbnail || body.thumbnail || body.pictures?.[0]?.secure_url || body.pictures?.[0]?.url || '',
-                pictures: body.pictures || [{ url: body.thumbnail }],
+                thumbnail: mainThumb,
+                pictures: extractedPics,
                 category_id: body.category_id,
                 category_name: categoryName,
                 date_created: body.date_created,

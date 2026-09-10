@@ -135,8 +135,75 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const [itemTargetSubcategories, setItemTargetSubcategories] = useState<Record<string, string>>({});
   const [discountPercent, setDiscountPercent] = useState<number>(15);
   const [isImportingMeli, setIsImportingMeli] = useState(false);
-  const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(DEFAULT_MELI_PRICING_CONFIG);
+  const [isSyncingImages, setIsSyncingImages] = useState(false);
+
+  const [meliPricingConfig, setMeliPricingConfig] = useState<MeliPricingConfig>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('trio3d_meli_pricing_config_v2');
+        if (saved) {
+          return { ...DEFAULT_MELI_PRICING_CONFIG, ...JSON.parse(saved) };
+        }
+      } catch (_) {}
+    }
+    return DEFAULT_MELI_PRICING_CONFIG;
+  });
+
+  const updateMeliPricingConfig = (newConfig: MeliPricingConfig) => {
+    setMeliPricingConfig(newConfig);
+    try {
+      localStorage.setItem('trio3d_meli_pricing_config_v2', JSON.stringify(newConfig));
+    } catch (_) {}
+  };
+
   const [showPricingConfigPanel, setShowPricingConfigPanel] = useState<boolean>(true);
+
+  const consolidatedList = React.useMemo(() => {
+    return groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products);
+  }, [meliPublications, meliPricingConfig, products]);
+
+  // Publicaciones de ML que ya están en la web pero les faltan imágenes de la publicación
+  const publishedWithMissingImages = React.useMemo(() => {
+    return consolidatedList.filter((item) => {
+      if (!item.isAlreadyPublished || !item.existingStoreProduct) return false;
+      const currentImgs = Array.isArray(item.existingStoreProduct.images) && item.existingStoreProduct.images.length > 0
+        ? item.existingStoreProduct.images.filter((img) => img !== '/images/soportes.png' && img !== '/images/hero.png')
+        : [item.existingStoreProduct.image].filter((img) => img && img !== '/images/soportes.png' && img !== '/images/hero.png');
+      return item.pictures.length > currentImgs.length;
+    });
+  }, [consolidatedList]);
+
+  // Helper para fusionar imágenes de la web con fotos de Mercado Libre sin duplicados
+  const mergeImagesHelper = (existingImages: string[] = [], newMeliImages: string[] = []): string[] => {
+    const result: string[] = [];
+    const seenKeys = new Set<string>();
+
+    const getCleanKey = (url: string) =>
+      url.toLowerCase().replace(/^https?:\/\//i, '').replace(/[-_][ifom]\.(jpg|webp|png)$/i, '').trim();
+
+    // 1. Conservar fotos ya existentes
+    for (const img of existingImages) {
+      if (!img || img === '/images/soportes.png' || img === '/images/hero.png') continue;
+      const key = getCleanKey(img);
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        result.push(img.replace(/^http:\/\//i, 'https://'));
+      }
+    }
+
+    // 2. Agregar fotos nuevas de ML
+    for (const meliImg of newMeliImages) {
+      if (!meliImg || meliImg === '/images/soportes.png') continue;
+      const httpsImg = meliImg.replace(/^http:\/\//i, 'https://');
+      const key = getCleanKey(httpsImg);
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        result.push(httpsImg);
+      }
+    }
+
+    return result.length > 0 ? result : ['/images/soportes.png'];
+  };
 
   const availableSubcategories = React.useMemo(() => {
     const set = new Set<string>();
@@ -201,7 +268,6 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
 
   const handleToggleSelectAllMeli = () => {
-    const consolidatedList = groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products);
     // Priorizar seleccionar solo los productos NUEVOS si existen
     const newItems = consolidatedList.filter((item) => !item.isAlreadyPublished);
     const targetItems = newItems.length > 0 ? newItems : consolidatedList;
@@ -283,31 +349,47 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
         const mainImg = item.pictures[0]?.url || item.lowestPriceItem.thumbnail || '/images/soportes.png';
         const allImages = item.pictures.map((p) => p.url).filter(Boolean);
 
-        // B. Crear producto consolidado en Supabase con subcategoría, variantes y precio basado en el menor costo
-        await onAddProduct({
-          name: item.title,
-          category: catName,
-          subcategory: subcatName,
-          description: item.description,
-          price: item.cleanPriceResult.formattedPrice,
-          image: mainImg,
-          images: allImages.length > 0 ? allImages : [mainImg],
-          materials: ['PLA Premium', 'PETG High Detail'],
-          tags: ['Tienda Oficial', '3D', 'Consolidado'],
-          peso: item.logisticData.peso,
-          alto: item.logisticData.alto,
-          ancho: item.logisticData.ancho,
-          largo: item.logisticData.largo,
-          requiresManualDimensions: item.logisticData.requiresManualDimensions,
-          meli_id: item.id,
-          meli_ids: item.meli_ids,
-          variants: item.variants,
-        });
+        if (item.isAlreadyPublished && item.existingStoreProduct) {
+          // Si el producto ya existe en la tienda, actualizar sus imágenes y precio sin duplicarlo
+          const currentImages = Array.isArray(item.existingStoreProduct.images) && item.existingStoreProduct.images.length > 0
+            ? item.existingStoreProduct.images
+            : [item.existingStoreProduct.image || '/images/soportes.png'];
+          const mergedImages = mergeImagesHelper(currentImages, allImages);
+
+          await onEditProduct(item.existingStoreProduct.id, {
+            images: mergedImages,
+            image: mergedImages[0] || item.existingStoreProduct.image,
+            price: item.cleanPriceResult.formattedPrice,
+            meli_id: item.id,
+            ...(item.existingStoreProduct.variants && item.existingStoreProduct.variants.length > 0 ? {} : { variants: item.variants }),
+          });
+        } else {
+          // B. Crear producto nuevo consolidado en Supabase con subcategoría, variantes y precio basado en el menor costo
+          await onAddProduct({
+            name: item.title,
+            category: catName,
+            subcategory: subcatName,
+            description: item.description,
+            price: item.cleanPriceResult.formattedPrice,
+            image: mainImg,
+            images: allImages.length > 0 ? allImages : [mainImg],
+            materials: ['PLA Premium', 'PETG High Detail'],
+            tags: ['Tienda Oficial', '3D', 'Consolidado'],
+            peso: item.logisticData.peso,
+            alto: item.logisticData.alto,
+            ancho: item.logisticData.ancho,
+            largo: item.logisticData.largo,
+            requiresManualDimensions: item.logisticData.requiresManualDimensions,
+            meli_id: item.id,
+            meli_ids: item.meli_ids,
+            variants: item.variants,
+          });
+        }
 
         count++;
       }
 
-      setNotification(`¡Se importaron exitosamente ${count} productos consolidados (con variantes y precio limpio basado en menor costo base)!`);
+      setNotification(`¡Se procesaron exitosamente ${count} publicaciones (los productos nuevos fueron creados y los existentes recibieron sus imágenes restantes y precio limpio)!`);
       setTimeout(() => setNotification(null), 5000);
       setSelectedMeliItemIds([]);
     } catch (err: any) {
@@ -315,6 +397,56 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
       alert('Error importando publicaciones: ' + (err.message || err));
     } finally {
       setIsImportingMeli(false);
+    }
+  };
+
+  const handleSyncRemainingImages = async (targetConsolidated?: ConsolidatedMeliProduct) => {
+    const targets = targetConsolidated
+      ? [targetConsolidated]
+      : consolidatedList.filter((item) => item.isAlreadyPublished && item.existingStoreProduct);
+
+    if (targets.length === 0) {
+      alert('No se encontraron publicaciones asociadas a productos existentes en la web.');
+      return;
+    }
+
+    setIsSyncingImages(true);
+    let updatedProductsCount = 0;
+    let totalImagesAdded = 0;
+
+    try {
+      for (const item of targets) {
+        if (!item.existingStoreProduct) continue;
+        const currentImgs = Array.isArray(item.existingStoreProduct.images) && item.existingStoreProduct.images.length > 0
+          ? item.existingStoreProduct.images
+          : [item.existingStoreProduct.image || '/images/soportes.png'];
+        const meliImages = item.pictures.map((p) => p.url).filter(Boolean);
+
+        const merged = mergeImagesHelper(currentImgs, meliImages);
+        const addedCount = merged.length - currentImgs.filter((img) => img !== '/images/soportes.png').length;
+
+        if (addedCount > 0 || merged.length !== currentImgs.length) {
+          await onEditProduct(item.existingStoreProduct.id, {
+            images: merged,
+            image: merged[0] || item.existingStoreProduct.image,
+            meli_id: item.id,
+          });
+          updatedProductsCount++;
+          totalImagesAdded += Math.max(0, addedCount);
+        }
+      }
+
+      if (updatedProductsCount > 0) {
+        setNotification(`¡Éxito! Se agregaron ${totalImagesAdded} imágenes restantes a ${updatedProductsCount} producto(s) en tu web.`);
+      } else {
+        setNotification('Los productos ya cuentan con todas las imágenes disponibles de Mercado Libre.');
+      }
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err: any) {
+      console.error('Error sincronizando imágenes restantes:', err);
+      alert('Error sincronizando imágenes: ' + (err.message || err));
+    } finally {
+      setIsSyncingImages(false);
     }
   };
 
@@ -536,13 +668,13 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Handle local image files upload -> Supabase Storage or Base64 Data URL (up to 5 images max)
+  // Handle local image files upload -> Supabase Storage or Base64 Data URL (up to 25 images)
   const handleImageFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (images.length >= 5) {
-      alert('Ya has alcanzado el límite máximo de 5 imágenes por producto.');
+    if (images.length >= 25) {
+      alert('Ya has alcanzado el límite máximo de 25 imágenes por producto.');
       return;
     }
 
@@ -551,8 +683,8 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     const filesArray = Array.from(files);
 
     for (const file of filesArray) {
-      if (images.length + newUploadedUrls.length >= 5) {
-        alert('Se ha alcanzado el límite máximo de 5 imágenes por producto.');
+      if (images.length + newUploadedUrls.length >= 25) {
+        alert('Se ha alcanzado el límite de imágenes por producto.');
         break;
       }
 
@@ -580,7 +712,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
       setImages((prev) => {
         // If prev only had default image and we're adding real images, replace default image
         const cleanPrev = prev.length === 1 && prev[0] === '/images/soportes.png' ? [] : prev;
-        const combined = [...cleanPrev, ...newUploadedUrls].slice(0, 5);
+        const combined = [...cleanPrev, ...newUploadedUrls].slice(0, 25);
         return combined;
       });
       setNotification(`¡${newUploadedUrls.length} imagen(es) agregada(s) correctamente!`);
@@ -593,14 +725,14 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
   const handleAddUrlImage = () => {
     if (!urlInput.trim()) return;
-    if (images.length >= 5) {
-      alert('Ya has alcanzado el límite máximo de 5 imágenes por producto.');
+    if (images.length >= 25) {
+      alert('Ya has alcanzado el límite máximo de 25 imágenes por producto.');
       return;
     }
 
     setImages((prev) => {
       const cleanPrev = prev.length === 1 && prev[0] === '/images/soportes.png' ? [] : prev;
-      return [...cleanPrev, urlInput.trim()].slice(0, 5);
+      return [...cleanPrev, urlInput.trim()].slice(0, 25);
     });
     setUrlInput('');
     setNotification('¡Enlace de imagen agregado a la lista!');
@@ -1943,19 +2075,40 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                           </button>
 
                           {meliPublications.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handleImportSelectedItems}
-                              disabled={isImportingMeli || selectedMeliItemIds.length === 0}
-                              className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-lg ${
-                                selectedMeliItemIds.length > 0
-                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950 cursor-pointer shadow-emerald-500/20'
-                                  : 'bg-neutral-800 text-neutral-500 border border-white/5 cursor-not-allowed'
-                              }`}
-                            >
-                              {isImportingMeli ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                              <span>{isImportingMeli ? 'Importando...' : `Importar Seleccionadas (${selectedMeliItemIds.length})`}</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleSyncRemainingImages()}
+                                disabled={isSyncingImages || publishedWithMissingImages.length === 0}
+                                className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-lg ${
+                                  publishedWithMissingImages.length > 0
+                                    ? 'bg-sky-500 hover:bg-sky-400 text-neutral-950 cursor-pointer shadow-sky-500/20'
+                                    : 'bg-neutral-800 text-neutral-400 border border-white/5 cursor-not-allowed opacity-70'
+                                }`}
+                                title="Compara los productos ya existentes en tu web y les agrega automáticamente todas las fotos restantes de Mercado Libre"
+                              >
+                                {isSyncingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4 text-neutral-950" />}
+                                <span>
+                                  {isSyncingImages
+                                    ? 'Sincronizando fotos...'
+                                    : `📸 Sincronizar Fotos Restantes en Web (${publishedWithMissingImages.length})`}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleImportSelectedItems}
+                                disabled={isImportingMeli || selectedMeliItemIds.length === 0}
+                                className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-lg ${
+                                  selectedMeliItemIds.length > 0
+                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950 cursor-pointer shadow-emerald-500/20'
+                                    : 'bg-neutral-800 text-neutral-500 border border-white/5 cursor-not-allowed'
+                                }`}
+                              >
+                                {isImportingMeli ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                <span>{isImportingMeli ? 'Importando...' : `Importar Seleccionadas (${selectedMeliItemIds.length})`}</span>
+                              </button>
+                            </>
                           )}
                         </div>
 
@@ -2076,13 +2229,13 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                               onClick={handleToggleSelectAllMeli}
                               className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-white/10 text-xs text-neutral-300 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                             >
-                              {selectedMeliItemIds.length === meliPublications.length ? (
+                              {selectedMeliItemIds.length > 0 ? (
                                 <CheckSquare className="w-4 h-4 text-amber-400" />
                               ) : (
                                 <Square className="w-4 h-4 text-neutral-400" />
                               )}
                               <span>
-                                {selectedMeliItemIds.length === meliPublications.length ? 'Deseleccionar Todo' : `Seleccionar Todo (${meliPublications.length})`}
+                                {selectedMeliItemIds.length > 0 ? `Deseleccionar Todo (${selectedMeliItemIds.length})` : `Seleccionar Todo (${consolidatedList.length} unificados)`}
                               </span>
                             </button>
                           )}
@@ -2090,11 +2243,75 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                         {showPricingConfigPanel && (
                           <div className="pt-3 border-t border-white/10 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                              {/* Comisión Clásica */}
+                            {/* Selector de Modo de Cálculo */}
+                            <div className="bg-neutral-900/90 border border-amber-500/30 rounded-2xl p-3.5 space-y-2">
+                              <label className="block text-xs font-black text-amber-300">
+                                📐 Método de Deducción de Recargos / Comisiones de Mercado Libre:
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateMeliPricingConfig({ ...meliPricingConfig, calculationMode: 'markup' })}
+                                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                    meliPricingConfig.calculationMode === 'markup'
+                                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-md shadow-amber-500/10'
+                                      : 'bg-neutral-950 border-white/10 text-neutral-400 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="text-xs font-extrabold flex items-center justify-between">
+                                    <span>🔄 Descontar Recargo Inverso (Markup)</span>
+                                    {meliPricingConfig.calculationMode === 'markup' && (
+                                      <span className="text-[10px] bg-amber-500 text-neutral-950 font-black px-1.5 py-0.5 rounded">
+                                        Recomendado
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-neutral-300 mt-1 leading-snug">
+                                    Fórmula: <code className="text-amber-300">Precio ML ÷ (1 + Recargo%)</code>. Ideal si inflaste tus precios web para publicar en Mercado Libre y querés recuperar exactamente tu precio web.
+                                  </p>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => updateMeliPricingConfig({ ...meliPricingConfig, calculationMode: 'margin' })}
+                                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                    meliPricingConfig.calculationMode === 'margin'
+                                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-md shadow-amber-500/10'
+                                      : 'bg-neutral-950 border-white/10 text-neutral-400 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="text-xs font-extrabold flex items-center justify-between">
+                                    <span>📉 Deducción de Retención Directa (Comisión)</span>
+                                    {meliPricingConfig.calculationMode === 'margin' && (
+                                      <span className="text-[10px] bg-amber-500 text-neutral-950 font-black px-1.5 py-0.5 rounded">
+                                        Activo
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-neutral-300 mt-1 leading-snug">
+                                    Fórmula: <code className="text-amber-300">Precio ML × (1 - Comisión%)</code>. Descuenta el porcentaje retenido por Mercado Libre sobre el cobro final en tu cuenta.
+                                  </p>
+                                </button>
+                              </div>
+
+                              {/* Ejemplo en vivo */}
+                              <div className="mt-2 text-[11px] bg-neutral-950/80 rounded-xl px-3 py-2 border border-white/10 flex items-center justify-between flex-wrap gap-2">
+                                <span className="text-neutral-400 font-semibold">
+                                  💡 Ejemplo en vivo con $12.000 en ML (Clásica {meliPricingConfig.classicCommissionPercent}%):
+                                </span>
+                                <span className="font-mono text-emerald-400 font-bold text-xs">
+                                  {meliPricingConfig.calculationMode === 'markup'
+                                    ? `$12.000 ÷ (1 + ${meliPricingConfig.classicCommissionPercent}%) = $${Math.round(12000 / (1 + meliPricingConfig.classicCommissionPercent / 100)).toLocaleString('es-AR')} en tu Web (Recargo de $${(12000 - Math.round(12000 / (1 + meliPricingConfig.classicCommissionPercent / 100))).toLocaleString('es-AR')} descontado)`
+                                    : `$12.000 - ${meliPricingConfig.classicCommissionPercent}% = $${Math.round(12000 * (1 - meliPricingConfig.classicCommissionPercent / 100)).toLocaleString('es-AR')} en tu Web`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {/* Comisión / Recargo Clásica */}
                               <div>
                                 <label className="block text-[11px] font-bold text-neutral-300 mb-1">
-                                  Comisión Clásica ML (%):
+                                  Recargo / Comisión Clásica ML (%):
                                 </label>
                                 <div className="relative">
                                   <input
@@ -2103,7 +2320,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                     max="99"
                                     value={meliPricingConfig.classicCommissionPercent}
                                     onChange={(e) =>
-                                      setMeliPricingConfig({
+                                      updateMeliPricingConfig({
                                         ...meliPricingConfig,
                                         classicCommissionPercent: Number(e.target.value) || 0,
                                       })
@@ -2114,10 +2331,10 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                 </div>
                               </div>
 
-                              {/* Comisión Premium */}
+                              {/* Comisión / Recargo Premium */}
                               <div>
                                 <label className="block text-[11px] font-bold text-neutral-300 mb-1">
-                                  Comisión Premium ML (%):
+                                  Recargo / Comisión Premium ML (%):
                                 </label>
                                 <div className="relative">
                                   <input
@@ -2126,7 +2343,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                     max="99"
                                     value={meliPricingConfig.premiumCommissionPercent}
                                     onChange={(e) =>
-                                      setMeliPricingConfig({
+                                      updateMeliPricingConfig({
                                         ...meliPricingConfig,
                                         premiumCommissionPercent: Number(e.target.value) || 0,
                                       })
@@ -2137,10 +2354,10 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                 </div>
                               </div>
 
-                              {/* Recargo por Cuotas */}
+                              {/* Recargo por Cuotas / Financiación Adicional */}
                               <div>
                                 <label className="block text-[11px] font-bold text-neutral-300 mb-1">
-                                  Recargo Cuotas/Financiación (%):
+                                  Recargo Cuotas/Financiación Extra (%):
                                 </label>
                                 <div className="relative">
                                   <input
@@ -2149,7 +2366,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                     max="99"
                                     value={meliPricingConfig.financingSurchargePercent}
                                     onChange={(e) =>
-                                      setMeliPricingConfig({
+                                      updateMeliPricingConfig({
                                         ...meliPricingConfig,
                                         financingSurchargePercent: Number(e.target.value) || 0,
                                       })
@@ -2163,7 +2380,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                               {/* Deducción Envío Gratis ($ ARS) */}
                               <div>
                                 <label className="block text-[11px] font-bold text-neutral-300 mb-1">
-                                  Deducción Envío Gratis ($):
+                                  Deducción Envío Gratis ($ ARS):
                                 </label>
                                 <input
                                   type="number"
@@ -2171,13 +2388,76 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   placeholder="Ej: 3500"
                                   value={meliPricingConfig.estimatedFreeShippingCost || ''}
                                   onChange={(e) =>
-                                    setMeliPricingConfig({
+                                    updateMeliPricingConfig({
                                       ...meliPricingConfig,
                                       estimatedFreeShippingCost: Number(e.target.value) || 0,
                                     })
                                   }
                                   className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
                                 />
+                              </div>
+
+                              {/* Costo Fijo por Unidad ML */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[11px] font-bold text-neutral-300">
+                                    Costo Fijo ML / Unidad ($):
+                                  </label>
+                                  <label className="flex items-center gap-1 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={meliPricingConfig.deductFixedFee}
+                                      onChange={(e) =>
+                                        updateMeliPricingConfig({
+                                          ...meliPricingConfig,
+                                          deductFixedFee: e.target.checked,
+                                        })
+                                      }
+                                      className="w-3.5 h-3.5 rounded text-amber-500 bg-neutral-900 border-white/20"
+                                    />
+                                    <span className="text-[10px] text-amber-400 font-bold">Activar</span>
+                                  </label>
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="Ej: 1500"
+                                  disabled={!meliPricingConfig.deductFixedFee}
+                                  value={meliPricingConfig.fixedFeePerUnit || ''}
+                                  onChange={(e) =>
+                                    updateMeliPricingConfig({
+                                      ...meliPricingConfig,
+                                      fixedFeePerUnit: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                  className={`w-full bg-neutral-900 border rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold font-mono focus:outline-none ${
+                                    meliPricingConfig.deductFixedFee ? 'border-amber-400/50' : 'border-white/10 opacity-50'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Descuento Adicional Voluntario en Web */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-neutral-300 mb-1">
+                                  Descuento Extra en Tienda Web (%):
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    placeholder="Ej: 5 (Opcional)"
+                                    value={meliPricingConfig.customDiscountPercent || ''}
+                                    onChange={(e) =>
+                                      updateMeliPricingConfig({
+                                        ...meliPricingConfig,
+                                        customDiscountPercent: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-emerald-300 font-bold font-mono focus:outline-none focus:border-emerald-400"
+                                  />
+                                  <span className="absolute right-3 top-1.5 text-xs text-neutral-500 font-bold">%</span>
+                                </div>
                               </div>
                             </div>
 
@@ -2188,7 +2468,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   type="checkbox"
                                   checked={meliPricingConfig.sanitizeTitle}
                                   onChange={(e) =>
-                                    setMeliPricingConfig({
+                                    updateMeliPricingConfig({
                                       ...meliPricingConfig,
                                       sanitizeTitle: e.target.checked,
                                     })
@@ -2205,7 +2485,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   type="checkbox"
                                   checked={meliPricingConfig.sanitizeDescription}
                                   onChange={(e) =>
-                                    setMeliPricingConfig({
+                                    updateMeliPricingConfig({
                                       ...meliPricingConfig,
                                       sanitizeDescription: e.target.checked,
                                     })
@@ -2222,7 +2502,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   type="checkbox"
                                   checked={meliPricingConfig.groupDuplicates}
                                   onChange={(e) =>
-                                    setMeliPricingConfig({
+                                    updateMeliPricingConfig({
                                       ...meliPricingConfig,
                                       groupDuplicates: e.target.checked,
                                     })
@@ -2276,7 +2556,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
                     {meliPublications.length > 0 && !isSearchingMeliPubs && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products)
+                        {consolidatedList
                           .filter((item) => {
                             if (filterPublishedStatus === 'new_only') return !item.isAlreadyPublished;
                             if (filterPublishedStatus === 'published_only') return item.isAlreadyPublished;
@@ -2362,9 +2642,40 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                       {consolidated.title}
                                     </h5>
                                     {consolidated.isAlreadyPublished && consolidated.existingStoreProduct && (
-                                      <p className="text-[10px] text-emerald-400 font-semibold truncate mt-1">
-                                        ✓ En Tienda: {consolidated.existingStoreProduct.name}
-                                      </p>
+                                      <div className="mt-1 space-y-1">
+                                        <p className="text-[10px] text-emerald-400 font-semibold truncate">
+                                          ✓ En Tienda: {consolidated.existingStoreProduct.name}
+                                        </p>
+                                        {(() => {
+                                          const storeImgs = Array.isArray(consolidated.existingStoreProduct.images) && consolidated.existingStoreProduct.images.length > 0
+                                            ? consolidated.existingStoreProduct.images.filter((img) => img !== '/images/soportes.png' && img !== '/images/hero.png')
+                                            : [consolidated.existingStoreProduct.image].filter((img) => img && img !== '/images/soportes.png' && img !== '/images/hero.png');
+                                          const diff = consolidated.pictures.length - storeImgs.length;
+                                          if (diff > 0) {
+                                            return (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleSyncRemainingImages(consolidated);
+                                                }}
+                                                className="px-2 py-0.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 text-[9px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                                                title={`Tu web tiene ${storeImgs.length} fotos y Mercado Libre tiene ${consolidated.pictures.length} fotos. Clic para agregar las ${diff} fotos restantes.`}
+                                              >
+                                                <ImageIcon className="w-3 h-3 text-sky-400" />
+                                                <span>+{diff} fotos en ML ➔ Agregar a Web</span>
+                                              </button>
+                                            );
+                                          } else {
+                                            return (
+                                              <span className="text-[9px] text-neutral-400 font-medium flex items-center gap-1">
+                                                <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                                <span>{consolidated.pictures.length} fotos al día</span>
+                                              </span>
+                                            );
+                                          }
+                                        })()}
+                                      </div>
                                     )}
 
                                     {/* Especificaciones Logísticas */}
@@ -2451,11 +2762,14 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                   <div className="text-[10px] text-neutral-400 line-through">
                                     ML menor base: ${consolidated.lowestBasePrice.toLocaleString('es-AR')}
                                   </div>
-                                  <div className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
+                                  <div className="text-xs font-black text-emerald-400 flex items-center gap-1.5 flex-wrap">
                                     <span>Neto Limpio: {priceResult.formattedPrice}</span>
                                     {priceResult.totalDeductionPercent > 0 && (
-                                      <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-300 px-1 rounded border border-emerald-500/30">
-                                        -{priceResult.totalDeductionPercent}%
+                                      <span
+                                        className="text-[9px] font-bold bg-emerald-500/20 text-emerald-300 px-1 rounded border border-emerald-500/30"
+                                        title={priceResult.calculationMode === 'markup' ? 'Recargo revertido con fórmula inversa' : 'Comisión directa deducida'}
+                                      >
+                                        -{priceResult.totalDeductionPercent}% {priceResult.calculationMode === 'markup' ? '(Recargo)' : '(Comisión)'}
                                       </span>
                                     )}
                                   </div>
