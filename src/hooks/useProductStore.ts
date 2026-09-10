@@ -289,12 +289,14 @@ export function useProductStore() {
         if (updatedData.alto !== undefined) dbPayload.alto = updatedData.alto;
         if (updatedData.ancho !== undefined) dbPayload.ancho = updatedData.ancho;
         if (updatedData.largo !== undefined) dbPayload.largo = updatedData.largo;
+        if (updatedData.meli_id !== undefined) dbPayload.meli_id = updatedData.meli_id;
+        if (updatedData.variants !== undefined) dbPayload.variants = updatedData.variants;
 
         const { error } = await supabase.from('products').update(dbPayload).eq('id', id);
         if (error) {
           console.error('Error updating product in Supabase:', error);
-          if (error.message?.includes('images') || error.message?.includes('subcategories')) {
-            const { images, subcategories, ...fallbackPayload } = dbPayload;
+          if (error.message?.includes('images') || error.message?.includes('subcategories') || error.message?.includes('variants') || error.message?.includes('meli_id')) {
+            const { images, subcategories, variants, meli_id, ...fallbackPayload } = dbPayload;
             await supabase.from('products').update(fallbackPayload).eq('id', id);
           }
         }

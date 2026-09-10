@@ -162,15 +162,9 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     return groupAndDeduplicateMeliPublications(meliPublications, meliPricingConfig, products);
   }, [meliPublications, meliPricingConfig, products]);
 
-  // Publicaciones de ML que ya están en la web pero les faltan imágenes de la publicación
-  const publishedWithMissingImages = React.useMemo(() => {
-    return consolidatedList.filter((item) => {
-      if (!item.isAlreadyPublished || !item.existingStoreProduct) return false;
-      const currentImgs = Array.isArray(item.existingStoreProduct.images) && item.existingStoreProduct.images.length > 0
-        ? item.existingStoreProduct.images.filter((img) => img !== '/images/soportes.png' && img !== '/images/hero.png')
-        : [item.existingStoreProduct.image].filter((img) => img && img !== '/images/soportes.png' && img !== '/images/hero.png');
-      return item.pictures.length > currentImgs.length;
-    });
+  // Publicaciones de ML que ya están asociadas a productos en la web
+  const publishedProductsToSync = React.useMemo(() => {
+    return consolidatedList.filter((item) => item.isAlreadyPublished && item.existingStoreProduct);
   }, [consolidatedList]);
 
   // Helper para fusionar imágenes de la web con fotos de Mercado Libre sin duplicados
@@ -400,7 +394,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     }
   };
 
-  const handleSyncRemainingImages = async (targetConsolidated?: ConsolidatedMeliProduct) => {
+  const handleSyncPricesAndImages = async (targetConsolidated?: ConsolidatedMeliProduct) => {
     const targets = targetConsolidated
       ? [targetConsolidated]
       : consolidatedList.filter((item) => item.isAlreadyPublished && item.existingStoreProduct);
@@ -413,6 +407,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
     setIsSyncingImages(true);
     let updatedProductsCount = 0;
     let totalImagesAdded = 0;
+    let priceUpdatesCount = 0;
 
     try {
       for (const item of targets) {
@@ -423,28 +418,31 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
         const meliImages = item.pictures.map((p) => p.url).filter(Boolean);
 
         const merged = mergeImagesHelper(currentImgs, meliImages);
-        const addedCount = merged.length - currentImgs.filter((img) => img !== '/images/soportes.png').length;
+        const addedCount = merged.length - currentImgs.filter((img) => img !== '/images/soportes.png' && img !== '/images/hero.png').length;
 
-        if (addedCount > 0 || merged.length !== currentImgs.length) {
-          await onEditProduct(item.existingStoreProduct.id, {
-            images: merged,
-            image: merged[0] || item.existingStoreProduct.image,
-            meli_id: item.id,
-          });
-          updatedProductsCount++;
-          totalImagesAdded += Math.max(0, addedCount);
-        }
+        const cleanPrice = item.cleanPriceResult.formattedPrice;
+        const priceChanged = item.existingStoreProduct.price !== cleanPrice;
+        if (priceChanged) priceUpdatesCount++;
+
+        await onEditProduct(item.existingStoreProduct.id, {
+          images: merged,
+          image: merged[0] || item.existingStoreProduct.image,
+          price: cleanPrice,
+          meli_id: item.id,
+          ...(item.existingStoreProduct.variants && item.existingStoreProduct.variants.length > 0 ? {} : { variants: item.variants }),
+        });
+
+        updatedProductsCount++;
+        if (addedCount > 0) totalImagesAdded += Math.max(0, addedCount);
       }
 
-      if (updatedProductsCount > 0) {
-        setNotification(`¡Éxito! Se agregaron ${totalImagesAdded} imágenes restantes a ${updatedProductsCount} producto(s) en tu web.`);
-      } else {
-        setNotification('Los productos ya cuentan con todas las imágenes disponibles de Mercado Libre.');
-      }
+      setNotification(
+        `¡Sincronización Exitosa! Se actualizaron precios e imágenes en ${updatedProductsCount} producto(s) de tu web. (Precios actualizados: ${priceUpdatesCount}, Fotos agregadas: ${totalImagesAdded})`
+      );
       setTimeout(() => setNotification(null), 5000);
     } catch (err: any) {
-      console.error('Error sincronizando imágenes restantes:', err);
-      alert('Error sincronizando imágenes: ' + (err.message || err));
+      console.error('Error sincronizando productos con Mercado Libre:', err);
+      alert('Error sincronizando productos: ' + (err.message || err));
     } finally {
       setIsSyncingImages(false);
     }
@@ -2078,20 +2076,20 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleSyncRemainingImages()}
-                                disabled={isSyncingImages || publishedWithMissingImages.length === 0}
+                                onClick={() => handleSyncPricesAndImages()}
+                                disabled={isSyncingImages || publishedProductsToSync.length === 0}
                                 className={`px-4 py-2.5 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all shadow-lg ${
-                                  publishedWithMissingImages.length > 0
+                                  publishedProductsToSync.length > 0
                                     ? 'bg-sky-500 hover:bg-sky-400 text-neutral-950 cursor-pointer shadow-sky-500/20'
                                     : 'bg-neutral-800 text-neutral-400 border border-white/5 cursor-not-allowed opacity-70'
                                 }`}
-                                title="Compara los productos ya existentes en tu web y les agrega automáticamente todas las fotos restantes de Mercado Libre"
+                                title="Recalcula y actualiza precios web con Mercado Libre y agrega automáticamente todas las fotos faltantes a los productos de tu tienda"
                               >
-                                {isSyncingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4 text-neutral-950" />}
+                                {isSyncingImages ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-neutral-950" />}
                                 <span>
                                   {isSyncingImages
-                                    ? 'Sincronizando fotos...'
-                                    : `📸 Sincronizar Fotos Restantes en Web (${publishedWithMissingImages.length})`}
+                                    ? 'Sincronizando...'
+                                    : `⚡ Sincronizar Precios + Fotos en Web (${publishedProductsToSync.length})`}
                                 </span>
                               </button>
 
@@ -2651,29 +2649,49 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                                             ? consolidated.existingStoreProduct.images.filter((img) => img !== '/images/soportes.png' && img !== '/images/hero.png')
                                             : [consolidated.existingStoreProduct.image].filter((img) => img && img !== '/images/soportes.png' && img !== '/images/hero.png');
                                           const diff = consolidated.pictures.length - storeImgs.length;
-                                          if (diff > 0) {
-                                            return (
+                                          const currentPrice = consolidated.existingStoreProduct.price;
+                                          const calculatedPrice = consolidated.cleanPriceResult.formattedPrice;
+                                          const isPriceOutdated = currentPrice !== calculatedPrice;
+
+                                          return (
+                                            <div className="space-y-1">
                                               <button
                                                 type="button"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  handleSyncRemainingImages(consolidated);
+                                                  handleSyncPricesAndImages(consolidated);
                                                 }}
-                                                className="px-2 py-0.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 text-[9px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-                                                title={`Tu web tiene ${storeImgs.length} fotos y Mercado Libre tiene ${consolidated.pictures.length} fotos. Clic para agregar las ${diff} fotos restantes.`}
+                                                className={`w-full px-2 py-1 rounded-lg text-[9px] font-extrabold flex items-center justify-between transition-all cursor-pointer shadow-sm ${
+                                                  isPriceOutdated || diff > 0
+                                                    ? 'bg-sky-500/25 hover:bg-sky-500/40 text-sky-200 border border-sky-400/50'
+                                                    : 'bg-neutral-800/80 hover:bg-neutral-800 text-neutral-300 border border-white/10'
+                                                }`}
+                                                title="Haz clic para sincronizar el precio limpio actual de ML y agregar fotos faltantes a este producto en la web"
                                               >
-                                                <ImageIcon className="w-3 h-3 text-sky-400" />
-                                                <span>+{diff} fotos en ML ➔ Agregar a Web</span>
+                                                <span className="flex items-center gap-1">
+                                                  <RefreshCw className="w-3 h-3 text-sky-400" />
+                                                  <span>Sincronizar Precio y Fotos</span>
+                                                </span>
+                                                {diff > 0 && (
+                                                  <span className="text-[8px] bg-sky-500/40 text-sky-100 px-1 rounded font-bold">
+                                                    +{diff} fotos
+                                                  </span>
+                                                )}
                                               </button>
-                                            );
-                                          } else {
-                                            return (
-                                              <span className="text-[9px] text-neutral-400 font-medium flex items-center gap-1">
-                                                <CheckCircle className="w-3 h-3 text-emerald-400" />
-                                                <span>{consolidated.pictures.length} fotos al día</span>
-                                              </span>
-                                            );
-                                          }
+
+                                              {isPriceOutdated ? (
+                                                <div className="text-[9px] font-bold text-amber-300 flex items-center justify-between">
+                                                  <span>Web: {currentPrice}</span>
+                                                  <span className="text-emerald-400">➔ ML Neto: {calculatedPrice}</span>
+                                                </div>
+                                              ) : (
+                                                <span className="text-[9px] text-neutral-400 font-medium flex items-center gap-1">
+                                                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                                  <span>Precio y {consolidated.pictures.length} fotos al día</span>
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
                                         })()}
                                       </div>
                                     )}
