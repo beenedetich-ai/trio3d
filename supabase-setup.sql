@@ -106,4 +106,77 @@ DROP POLICY IF EXISTS "Permitir subida y lectura pública de imágenes" ON stora
 CREATE POLICY "Permitir subida y lectura pública de imágenes" ON storage.objects
 FOR ALL USING (bucket_id = 'product-images') WITH CHECK (bucket_id = 'product-images');
 
+-- 8. LIMPIEZA DE CATEGORÍAS ANTERIORES Y SEED OFICIAL DE MERCADO LIBRE
+DELETE FROM public.subcategories 
+WHERE category_name IN ('Llaveros', 'Decoración', 'Decoracion', 'Soportes', 'Macetas', 'Regalos personalizados', 'Figuras', 'Diseño a medida', 'Diseno a medida');
+
+DELETE FROM public.categories 
+WHERE name IN ('Llaveros', 'Decoración', 'Decoracion', 'Soportes', 'Macetas', 'Regalos personalizados', 'Figuras', 'Diseño a medida', 'Diseno a medida');
+
+-- Carga de Categorías Oficiales de Mercado Libre
+INSERT INTO public.categories (name, badge, description, image) VALUES
+  ('Hogar, Muebles y Jardín', 'Hogar & Deco', 'Macetas Voronoi, floreros en espiral paramétricos, lámparas y deco moderna.', '/images/macetas.png'),
+  ('Computación', 'Gamer & Desk', 'Soportes para auriculares gamer, elevadores de notebook y organizadores de escritorio.', '/images/soportes.png'),
+  ('Celulares y Teléfonos', 'Accesorios Tech', 'Soportes multisuperficie regulables, docks de carga y accesorios móviles.', '/images/soportes.png'),
+  ('Juegos y Juguetes', 'Coleccionables', 'Figuras coleccionables, dragones flexi articulados, mechas y personajes en alta resolución.', '/images/figuras.png'),
+  ('Souvenirs, Cotillón y Fiestas', 'Personalizados', 'Llaveros tipográficos personalizados, merchandising corporativo y recuerdos para eventos.', '/images/soportes.png'),
+  ('Arte, Librería y Mercería', 'Arte Digital', 'Esculturas paramétricas, cajas litofanía con luz LED interior y obras artísticas en 3D.', '/images/decoracion.png'),
+  ('Industrias y Oficinas', 'Ingeniería 3D', 'Diseño CAD 3D a medida, repuestos técnicos mecánicos, prototipos y carcasas electrónicas.', '/images/hero.png'),
+  ('Accesorios para Vehículos', 'Automotor', 'Repuestos plásticos descatalogados, adaptadores vehiculares y accesorios para autos y motos.', '/images/soportes.png'),
+  ('Consolas y Videojuegos', 'Gaming', 'Soportes para joysticks y mandos, stands para consolas y organizadores de setup gamer.', '/images/figuras.png'),
+  ('Herramientas', 'Taller & Pro', 'Organizadores de taller, soportes de pared para herramientas y plantillas de precisión.', '/images/hero.png'),
+  ('Animales y Mascotas', 'Pet Care', 'Placas identificatorias con nombre y teléfono, comederos elevados y accesorios.', '/images/macetas.png'),
+  ('Deportes y Fitness', 'Sport & Outdoor', 'Soportes para ciclocomputadoras, monturas de acción y accesorios deportivos.', '/images/soportes.png')
+ON CONFLICT (name) DO UPDATE SET
+  badge = EXCLUDED.badge,
+  description = EXCLUDED.description,
+  image = EXCLUDED.image;
+
+-- Carga de Subcategorías de Mercado Libre
+INSERT INTO public.subcategories (category_name, name) VALUES
+  ('Hogar, Muebles y Jardín', 'Macetas & Jardinería'),
+  ('Hogar, Muebles y Jardín', 'Jarrones & Floreros'),
+  ('Hogar, Muebles y Jardín', 'Decoración & Bazar'),
+  ('Hogar, Muebles y Jardín', 'Organización del Hogar'),
+  ('Computación', 'Soportes Gamer & Auriculares'),
+  ('Computación', 'Elevadores de Notebook'),
+  ('Computación', 'Organizadores de Escritorio'),
+  ('Computación', 'Periféricos & Cables'),
+  ('Celulares y Teléfonos', 'Soportes de Celular & Tablet'),
+  ('Celulares y Teléfonos', 'Docks de Carga'),
+  ('Celulares y Teléfonos', 'Accesorios Móviles'),
+  ('Juegos y Juguetes', 'Figuras de Acción & Mechs'),
+  ('Juegos y Juguetes', 'Flexi Articulados'),
+  ('Juegos y Juguetes', 'Coleccionables'),
+  ('Juegos y Juguetes', 'Juegos de Mesa & Dados'),
+  ('Souvenirs, Cotillón y Fiestas', 'Llaveros Personalizados'),
+  ('Souvenirs, Cotillón y Fiestas', 'Corporativos & Merchandising'),
+  ('Souvenirs, Cotillón y Fiestas', 'Souvenirs para Eventos'),
+  ('Souvenirs, Cotillón y Fiestas', 'Adornos para Tortas'),
+  ('Arte, Librería y Mercería', 'Esculturas & Arte 3D'),
+  ('Arte, Librería y Mercería', 'Litofanías & Lámparas'),
+  ('Arte, Librería y Mercería', 'Cuadros & Placas'),
+  ('Arte, Librería y Mercería', 'Artículos de Librería'),
+  ('Industrias y Oficinas', 'Ingeniería & Repuestos 3D'),
+  ('Industrias y Oficinas', 'Carcasas & Prototipos'),
+  ('Industrias y Oficinas', 'Placas & Señalética QR'),
+  ('Industrias y Oficinas', 'Maquetas & Modelado'),
+  ('Accesorios para Vehículos', 'Repuestos de Automotor'),
+  ('Accesorios para Vehículos', 'Accesorios para Autos'),
+  ('Accesorios para Vehículos', 'Accesorios para Motos'),
+  ('Accesorios para Vehículos', 'Llaveros Automotores'),
+  ('Consolas y Videojuegos', 'Soportes para Joysticks'),
+  ('Consolas y Videojuegos', 'Accesorios de Consolas'),
+  ('Consolas y Videojuegos', 'Deco Gamer'),
+  ('Herramientas', 'Organizadores de Taller'),
+  ('Herramientas', 'Soportes de Pared'),
+  ('Herramientas', 'Guías & Plantillas de Precisión'),
+  ('Animales y Mascotas', 'Placas Identificatorias'),
+  ('Animales y Mascotas', 'Comederos Elevados'),
+  ('Animales y Mascotas', 'Accesorios para Mascotas'),
+  ('Deportes y Fitness', 'Soportes para Bicicleta'),
+  ('Deportes y Fitness', 'Monturas de Acción'),
+  ('Deportes y Fitness', 'Accesorios Deportivos')
+ON CONFLICT (category_name, name) DO NOTHING;
+
 

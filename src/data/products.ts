@@ -6,10 +6,43 @@ export interface ProductVariant {
   meli_id?: string;
 }
 
+export const MELI_CATEGORIES = [
+  'Hogar, Muebles y Jardín',
+  'Computación',
+  'Celulares y Teléfonos',
+  'Juegos y Juguetes',
+  'Souvenirs, Cotillón y Fiestas',
+  'Arte, Librería y Mercería',
+  'Industrias y Oficinas',
+  'Accesorios para Vehículos',
+  'Consolas y Videojuegos',
+  'Herramientas',
+  'Electrónica, Audio y Video',
+  'Deportes y Fitness',
+  'Animales y Mascotas',
+  'Belleza y Cuidado Personal',
+  'Salud y Equipamiento Médico',
+  'Bebés',
+  'Ropa y Accesorios',
+  'Agro',
+  'Alimentos y Bebidas',
+  'Antigüedades y Colecciones',
+  'Construcción',
+  'Electrodomésticos y Aires Ac.',
+  'Instrumentos Musicales',
+  'Joyas y Relojes',
+  'Libros, Revistas y Comics',
+  'Música, Películas y Series',
+  'Servicios',
+  'Otras categorías',
+] as const;
+
+export type MeliCategory = (typeof MELI_CATEGORIES)[number];
+
 export interface Product {
   id: string;
   name: string;
-  category: 'Llaveros' | 'Decoración' | 'Soportes' | 'Macetas' | 'Regalos personalizados' | 'Figuras' | 'Diseño a medida' | string;
+  category: MeliCategory | string;
   subcategory?: string;
   subcategories?: string[];
   description: string;
@@ -30,24 +63,29 @@ export interface Product {
   requiresManualDimensions?: boolean; // Etiqueta [REQUIERE MEDIDAS MANUALES]
 }
 
-
 export const CATEGORIES = [
   'Todos',
-  'Llaveros',
-  'Decoración',
-  'Soportes',
-  'Macetas',
-  'Regalos personalizados',
-  'Figuras',
-  'Diseño a medida',
+  'Hogar, Muebles y Jardín',
+  'Computación',
+  'Celulares y Teléfonos',
+  'Juegos y Juguetes',
+  'Souvenirs, Cotillón y Fiestas',
+  'Arte, Librería y Mercería',
+  'Industrias y Oficinas',
+  'Accesorios para Vehículos',
+  'Consolas y Videojuegos',
+  'Herramientas',
+  'Animales y Mascotas',
+  'Deportes y Fitness',
 ] as const;
 
 export const PRODUCTS: Product[] = [
   {
     id: 'llavero-nombre',
     name: 'Llavero Tipográfico Personalizado',
-    category: 'Llaveros',
-    subcategory: 'Tipográficos',
+    category: 'Souvenirs, Cotillón y Fiestas',
+    subcategory: 'Llaveros Personalizados',
+    subcategories: ['Llaveros Personalizados', 'Tipográficos'],
     description: 'Llavero ultra liviano y resistente con tu nombre, marca o palabra favorita en relieve 3D bicolor.',
     price: 'Desde $1.500',
     isPopular: true,
@@ -63,8 +101,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'llavero-logo',
     name: 'Llavero Corp de Marca o Emprendimiento',
-    category: 'Llaveros',
+    category: 'Souvenirs, Cotillón y Fiestas',
     subcategory: 'Corporativos & Merchandising',
+    subcategories: ['Corporativos & Merchandising', 'Mayorista'],
     description: 'Perfecto para merchandising, regalos corporativos y eventos. Grabado de alta precisión.',
     price: 'Desde $1.200 (Mayorista)',
     image: '/images/soportes.png',
@@ -79,8 +118,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'jarrón-espiral',
     name: 'Jarrón Espiral Geométrico',
-    category: 'Decoración',
+    category: 'Hogar, Muebles y Jardín',
     subcategory: 'Jarrones & Floreros',
+    subcategories: ['Jarrones & Floreros', 'Decoración & Bazar'],
     description: 'Pieza decorativa de diseño paramétrico con acabado sedoso en espiral. Ideal para flores secas y decoración moderna.',
     price: 'Desde $8.500',
     isPopular: true,
@@ -96,8 +136,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'escultura-voronoi',
     name: 'Escultura Decorativa Voronoi',
-    category: 'Decoración',
+    category: 'Arte, Librería y Mercería',
     subcategory: 'Esculturas & Arte 3D',
+    subcategories: ['Esculturas & Arte 3D', 'Arte Digital'],
     description: 'Objeto de arte abstracto impreso con estructura orgánica Voronoi. Genera sombras increíbles con la luz ambiental.',
     price: 'Desde $12.000',
     image: '/images/decoracion.png',
@@ -112,8 +153,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'soporte-auriculares',
     name: 'Soporte Gamer para Auriculares',
-    category: 'Soportes',
-    subcategory: 'Gaming & Headphones',
+    category: 'Computación',
+    subcategory: 'Soportes Gamer & Auriculares',
+    subcategories: ['Soportes Gamer & Auriculares', 'Gaming'],
     description: 'Soporte ergonómico de alta resistencia con detalles en naranja neón. Mantiene tus auriculares seguros y estilizados.',
     price: 'Desde $9.900',
     isPopular: true,
@@ -129,8 +171,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'soporte-celular',
     name: 'Soporte Universal de Celular & Tablet',
-    category: 'Soportes',
-    subcategory: 'Escritorio & Celulares',
+    category: 'Celulares y Teléfonos',
+    subcategory: 'Soportes de Celular & Tablet',
+    subcategories: ['Soportes de Celular & Tablet', 'Escritorio'],
     description: 'Soporte regulable multisuperficie con pasacables integrado. Ideal para escritorios y llamadas por Zoom.',
     price: 'Desde $4.500',
     image: '/images/soportes.png',
@@ -145,8 +188,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'maceta-voronoi',
     name: 'Maceta Geometric Voronoi & Succulents',
-    category: 'Macetas',
-    subcategory: 'Geométricas & Voronoi',
+    category: 'Hogar, Muebles y Jardín',
+    subcategory: 'Macetas & Jardinería',
+    subcategories: ['Macetas & Jardinería', 'Decoración & Bazar'],
     description: 'Maceta geométrica con diseño de drenaje optimizado para suculentas y plantas de interior.',
     price: 'Desde $6.200',
     isPopular: true,
@@ -162,8 +206,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'maceta-autorregante',
     name: 'Maceta Autorregante 3D Duo',
-    category: 'Macetas',
-    subcategory: 'Autorregantes',
+    category: 'Hogar, Muebles y Jardín',
+    subcategory: 'Macetas & Jardinería',
+    subcategories: ['Macetas & Jardinería', 'Autorregantes'],
     description: 'Sistema inteligente de dos piezas que mantiene tus plantas hidratadas automáticamente por días.',
     price: 'Desde $8.900',
     image: '/images/macetas.png',
@@ -178,8 +223,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'litofania-luz',
     name: 'Caja Litofanía 3D con Foto & Luz LED',
-    category: 'Regalos personalizados',
+    category: 'Arte, Librería y Mercería',
     subcategory: 'Litofanías & Lámparas',
+    subcategories: ['Litofanías & Lámparas', 'Regalos Emotivos'],
     description: 'Tu foto favorita convertida en una escultura 3D que cobra vida al encender la luz LED interior.',
     price: 'Desde $14.500',
     isPopular: true,
@@ -195,8 +241,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'placa-escritorio',
     name: 'Placa de Escritorio & Logotipo 3D',
-    category: 'Regalos personalizados',
-    subcategory: 'Placas & QR',
+    category: 'Industrias y Oficinas',
+    subcategory: 'Placas & Señalética QR',
+    subcategories: ['Placas & Señalética QR', 'Oficina'],
     description: 'Placa personalizada con nombre, cargo o código QR de pago/redes. Acabado profesional.',
     price: 'Desde $7.500',
     image: '/images/soportes.png',
@@ -211,8 +258,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'figura-robot',
     name: 'Figura Coleccionable Mech Biped',
-    category: 'Figuras',
-    subcategory: 'Coleccionables & Mechs',
+    category: 'Juegos y Juguetes',
+    subcategory: 'Figuras de Acción & Mechs',
+    subcategories: ['Figuras de Acción & Mechs', 'Coleccionables'],
     description: 'Figura de alta resolución impresa en PLA de máxima precisión con detalles minuciosos y capas imperceptibles.',
     price: 'Desde $11.000',
     isPopular: true,
@@ -228,8 +276,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'figura-dragon',
     name: 'Dragón Articulado Flexi',
-    category: 'Figuras',
+    category: 'Juegos y Juguetes',
     subcategory: 'Flexi Articulados',
+    subcategories: ['Flexi Articulados', 'Sensorial'],
     description: 'Famoso dragón impreso en una sola pieza con articulaciones fluidas y movimiento dinámico.',
     price: 'Desde $7.900',
     image: '/images/figuras.png',
@@ -244,8 +293,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'diseno-repuestos',
     name: 'Diseño 3D & Pieza de Repuesto',
-    category: 'Diseño a medida',
-    subcategory: 'Ingeniería & Repuestos',
+    category: 'Industrias y Oficinas',
+    subcategory: 'Ingeniería & Repuestos 3D',
+    subcategories: ['Ingeniería & Repuestos 3D', 'Reemplazo Técnico'],
     description: '¿Se te rompió un engranaje, traba o pieza descontinuada? La diseñamos en 3D y la fabricamos en material ultra resistente.',
     price: 'Cotización personalizada',
     isPopular: true,
@@ -261,8 +311,9 @@ export const PRODUCTS: Product[] = [
   {
     id: 'diseno-carcasa',
     name: 'Carcasa & Enclosure para Electrónica',
-    category: 'Diseño a medida',
-    subcategory: 'Prototipos & Carcasas',
+    category: 'Industrias y Oficinas',
+    subcategory: 'Carcasas & Prototipos',
+    subcategories: ['Carcasas & Prototipos', 'Electrónica'],
     description: 'Diseño y prototipado rápido de cajas para Arduino, Raspberry Pi, sensores e instrumentos industriales.',
     price: 'Cotización personalizada',
     image: '/images/hero.png',
@@ -275,4 +326,3 @@ export const PRODUCTS: Product[] = [
     largo: 15,
   }
 ];
-

@@ -100,16 +100,17 @@ export const Footer: React.FC = () => {
           {/* Categories */}
           <div>
             <h4 className="text-white font-bold text-base mb-4 border-l-2 border-brand-500 pl-3">
-              Rubros Principales
+              Categorías Mercado Libre
             </h4>
             <ul className="space-y-2 text-xs">
-              <li className="text-neutral-400">Llaveros Personalizados & Corp</li>
-              <li className="text-neutral-400">Decoración Paramétrica & Espirales</li>
-              <li className="text-neutral-400">Soportes Gamer & Escritorio</li>
-              <li className="text-neutral-400">Macetas Voronoi & Autorregantes</li>
-              <li className="text-neutral-400">Litofanías & Regalos con Foto</li>
-              <li className="text-neutral-400">Figuras & Miniaturas Detalladas</li>
-              <li className="text-neutral-400">Diseño a Medida & Proyectos Especiales</li>
+              <li className="text-neutral-400">Hogar, Muebles y Jardín</li>
+              <li className="text-neutral-400">Computación & Gaming</li>
+              <li className="text-neutral-400">Celulares y Teléfonos</li>
+              <li className="text-neutral-400">Juegos y Juguetes (Coleccionables)</li>
+              <li className="text-neutral-400">Souvenirs, Cotillón y Fiestas</li>
+              <li className="text-neutral-400">Arte, Librería y Mercería</li>
+              <li className="text-neutral-400">Industrias y Oficinas (Ingeniería 3D)</li>
+              <li className="text-neutral-400">Accesorios para Vehículos</li>
             </ul>
           </div>
 

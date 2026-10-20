@@ -545,7 +545,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
 
   // Form states
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<Product['category']>('Llaveros');
+  const [category, setCategory] = useState<Product['category']>('Hogar, Muebles y Jardín');
   const [subcategory, setSubcategory] = useState('');
   const [subcategories, setSubcategories] = useState<string[]>([]);
   const [customSubcatInput, setCustomSubcatInput] = useState('');
@@ -568,7 +568,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const [copiedCode, setCopiedCode] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newSubcategoryInput, setNewSubcategoryInput] = useState('');
-  const [selectedSubCategoryParent, setSelectedSubCategoryParent] = useState<string>('Figuras');
+  const [selectedSubCategoryParent, setSelectedSubCategoryParent] = useState<string>('Hogar, Muebles y Jardín');
 
   // Available categories (excluding 'Todos')
   const formCategories = categories.filter((c) => c !== 'Todos');
@@ -756,7 +756,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
   const resetForm = () => {
     setEditingId(null);
     setName('');
-    setCategory('Llaveros');
+    setCategory('Hogar, Muebles y Jardín');
     setSubcategory('');
     setSubcategories([]);
     setCustomSubcatInput('');
@@ -1508,7 +1508,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                         <input
                           type="text"
                           required
-                          placeholder="Ej: Llaveros, Iluminación..."
+                          placeholder="Ej: Hogar, Muebles y Jardín, Computación..."
                           value={catNameInput}
                           onChange={(e) => setCatNameInput(e.target.value)}
                           className="w-full bg-neutral-900 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-brand-500"
@@ -1659,7 +1659,7 @@ CREATE POLICY "Permitir todo en mercadolibre_tokens" ON public.mercadolibre_toke
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-black text-pink-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Star className="w-4 h-4 text-pink-400" />
-                      <span>Organizar Subcategorías Fijas (Ej: Figuras ➔ Roblox)</span>
+                      <span>Organizar Subcategorías Fijas (Ej: Juegos y Juguetes ➔ Flexi Articulados)</span>
                     </label>
                   </div>
 

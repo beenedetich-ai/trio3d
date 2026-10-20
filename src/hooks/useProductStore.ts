@@ -4,8 +4,39 @@ import { useState, useEffect } from 'react';
 import { PRODUCTS, Product } from '@/data/products';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
-const STORAGE_KEY = 'trio3d_custom_products_v2';
-const HAS_SEEDED_KEY = 'trio3d_has_seeded_v2';
+const STORAGE_KEY = 'trio3d_custom_products_meli_v3';
+const HAS_SEEDED_KEY = 'trio3d_has_seeded_meli_v3';
+const LEGACY_STORAGE_KEYS = ['trio3d_custom_products_v2', 'trio3d_custom_products'];
+
+const LEGACY_CAT_TO_MELI: Record<string, { category: string; subcategory?: string }> = {
+  llaveros: { category: 'Souvenirs, Cotillón y Fiestas', subcategory: 'Llaveros Personalizados' },
+  decoración: { category: 'Hogar, Muebles y Jardín', subcategory: 'Jarrones & Floreros' },
+  decoracion: { category: 'Hogar, Muebles y Jardín', subcategory: 'Jarrones & Floreros' },
+  soportes: { category: 'Computación', subcategory: 'Soportes Gamer & Auriculares' },
+  macetas: { category: 'Hogar, Muebles y Jardín', subcategory: 'Macetas & Jardinería' },
+  'regalos personalizados': { category: 'Arte, Librería y Mercería', subcategory: 'Litofanías & Lámparas' },
+  figuras: { category: 'Juegos y Juguetes', subcategory: 'Figuras de Acción & Mechs' },
+  'diseño a medida': { category: 'Industrias y Oficinas', subcategory: 'Ingeniería & Repuestos 3D' },
+  'diseno a medida': { category: 'Industrias y Oficinas', subcategory: 'Ingeniería & Repuestos 3D' },
+};
+
+function migrateProductCategory(prod: any): Product {
+  if (!prod || !prod.category) return prod;
+  const lower = String(prod.category).toLowerCase().trim();
+  const meliMatch = LEGACY_CAT_TO_MELI[lower];
+  if (meliMatch) {
+    const rawSubcats = Array.isArray(prod.subcategories) && prod.subcategories.length > 0
+      ? prod.subcategories
+      : (meliMatch.subcategory ? [meliMatch.subcategory] : []);
+    return {
+      ...prod,
+      category: meliMatch.category,
+      subcategory: prod.subcategory || meliMatch.subcategory,
+      subcategories: rawSubcats,
+    };
+  }
+  return prod;
+}
 
 export function useProductStore() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -89,7 +120,7 @@ export function useProductStore() {
                 const rawSubcats = Array.isArray(item.subcategories) && item.subcategories.length > 0
                   ? item.subcategories
                   : (item.subcategory ? item.subcategory.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
-                return {
+                return migrateProductCategory({
                   id: item.id,
                   name: item.name,
                   category: item.category,
@@ -108,8 +139,23 @@ export function useProductStore() {
                   ancho: item.ancho || 10,
                   largo: item.largo || 10,
                   meli_id: item.meli_id || null,
-                };
+                });
               });
+
+              // Check if any product had a legacy category and update Supabase
+              const hadLegacyInDb = data.some((item: any) =>
+                item?.category && LEGACY_CAT_TO_MELI[String(item.category).toLowerCase().trim()]
+              );
+              if (hadLegacyInDb && supabase) {
+                mapped.forEach(async (p) => {
+                  try {
+                    await supabase.from('products').update({
+                      category: p.category,
+                      subcategory: p.subcategory,
+                    }).eq('id', p.id);
+                  } catch (_) {}
+                });
+              }
 
               if (isMounted) {
                 setProducts(mapped);
@@ -129,17 +175,27 @@ export function useProductStore() {
 
       // Fallback if Supabase is offline or not configured: LocalStorage or static catalog
       try {
+        LEGACY_STORAGE_KEYS.forEach((k) => {
+          try {
+            const old = localStorage.getItem(k);
+            if (old && !localStorage.getItem(STORAGE_KEY)) {
+              localStorage.setItem(STORAGE_KEY, old);
+            }
+            localStorage.removeItem(k);
+          } catch (_) {}
+        });
+
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             const migrated = parsed.map((p: Product) => {
               let finalPeso = typeof p.peso === 'number' && p.peso > 0 ? p.peso : 200;
               if (finalPeso < 5) finalPeso = Math.round(finalPeso * 1000);
               const rawImgs = Array.isArray(p.images) && p.images.length > 0
                 ? p.images
                 : [p.image || '/images/soportes.png'];
-              return {
+              return migrateProductCategory({
                 ...p,
                 image: p.image || rawImgs[0],
                 images: rawImgs,
@@ -147,13 +203,21 @@ export function useProductStore() {
                 alto: typeof p.alto === 'number' && p.alto > 0 ? p.alto : 10,
                 ancho: typeof p.ancho === 'number' && p.ancho > 0 ? p.ancho : 10,
                 largo: typeof p.largo === 'number' && p.largo > 0 ? p.largo : 10,
-              };
+              });
             });
             if (isMounted) setProducts(migrated);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+            } catch (_) {}
+          } else {
+            if (isMounted) setProducts(PRODUCTS);
           }
+        } else {
+          if (isMounted) setProducts(PRODUCTS);
         }
       } catch (error) {
         console.error('Error loading products from localStorage:', error);
+        if (isMounted) setProducts(PRODUCTS);
       } finally {
         if (isMounted) setIsLoaded(true);
       }

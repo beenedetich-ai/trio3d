@@ -24,7 +24,7 @@ export const LocalSeoSection: React.FC = () => {
       icon: Wrench,
       title: 'Repuestos Técnicos & Piezas Discontinuadas',
       desc: 'Reemplazamos engranajes, bujes, soportes, perillas y carcasas rotas de electrodomésticos, vehículos o maquinarias que ya no se consiguen en el mercado.',
-      tag: 'Diseño a Medida',
+      tag: 'Industrias y Oficinas',
     },
     {
       icon: Cpu,

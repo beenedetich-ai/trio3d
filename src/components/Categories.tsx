@@ -1,8 +1,26 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
-import { Key, Sparkles, Headphones, Flower2, Gift, Bot, PenTool, Layers, ArrowUpRight, LucideIcon } from 'lucide-react';
+import {
+  Home,
+  Laptop,
+  Smartphone,
+  Gamepad2,
+  Gift,
+  Palette,
+  Factory,
+  Car,
+  Gamepad,
+  Hammer,
+  Dog,
+  Trophy,
+  Sparkles,
+  HeartPulse,
+  Tv,
+  Layers,
+  ArrowUpRight,
+  LucideIcon,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { CategoryItem, DEFAULT_CATEGORY_ITEMS } from '@/hooks/useCategoryStore';
 
@@ -12,15 +30,30 @@ interface CategoriesProps {
 }
 
 const ICON_MAP: Record<string, LucideIcon> = {
-  llaveros: Key,
-  decoración: Sparkles,
-  decoracion: Sparkles,
-  soportes: Headphones,
-  macetas: Flower2,
-  'regalos personalizados': Gift,
-  figuras: Bot,
-  'diseño a medida': PenTool,
-  'diseno a medida': PenTool,
+  'hogar, muebles y jardín': Home,
+  'hogar, muebles y jardin': Home,
+  'hogar': Home,
+  'computación': Laptop,
+  'computacion': Laptop,
+  'celulares y teléfonos': Smartphone,
+  'celulares y telefonos': Smartphone,
+  'juegos y juguetes': Gamepad2,
+  'souvenirs, cotillón y fiestas': Gift,
+  'souvenirs, cotillon y fiestas': Gift,
+  'arte, librería y mercería': Palette,
+  'arte, libreria y merceria': Palette,
+  'industrias y oficinas': Factory,
+  'accesorios para vehículos': Car,
+  'accesorios para vehiculos': Car,
+  'consolas y videojuegos': Gamepad,
+  'herramientas': Hammer,
+  'animales y mascotas': Dog,
+  'deportes y fitness': Trophy,
+  'belleza y cuidado personal': Sparkles,
+  'salud y equipamiento médico': HeartPulse,
+  'salud y equipamiento medico': HeartPulse,
+  'electrónica, audio y video': Tv,
+  'electronica, audio y video': Tv,
 };
 
 export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, categoriesList }) => {
@@ -62,16 +95,17 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, catego
         >
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-amber-500/10 border border-pink-500/30 text-pink-300 text-xs font-bold uppercase tracking-widest mb-4 shadow-lg backdrop-blur-md">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Nuestros Rubros</span>
+            <span>Rubros Oficiales Mercado Libre</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
-            Explora las infinitas posibilidades de la{' '}
+            Categorías de{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-amber-400 trio-glow-text">
-              Impresión 3D
-            </span>
+              Mercado Libre
+            </span>{' '}
+            en Trío 3D
           </h2>
           <p className="mt-4 text-neutral-400 text-base sm:text-lg font-light leading-relaxed">
-            Descubre la amplia variedad de soluciones en impresión 3D de ingeniería y artesanía que creamos con precisión micrométrica.
+            Explora nuestro catálogo estructurado según la clasificación oficial de Mercado Libre. Encuentra con rapidez creaciones, soportes gamer, repuestos y piezas de ingeniería 3D.
           </p>
         </motion.div>
 
@@ -84,8 +118,8 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, catego
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         >
           {itemsToRender.map((cat) => {
-            const Icon = ICON_MAP[cat.name.toLowerCase()] || Layers;
-            const badgeText = cat.badge || 'Impresión 3D';
+            const Icon = ICON_MAP[cat.name.toLowerCase().trim()] || Layers;
+            const badgeText = cat.badge || 'Mercado Libre';
             const descText = cat.desc || 'Productos y artículos personalizados impresos en 3D.';
             const imageSrc = cat.image || '/images/hero.png';
 
@@ -127,7 +161,7 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, catego
                   </div>
 
                   {/* Title & Description */}
-                  <h3 className="text-xl font-bold text-white group-hover:text-brand-400 transition-colors flex items-center gap-1.5 relative z-10">
+                  <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-brand-400 transition-colors flex items-center gap-1.5 relative z-10 leading-snug">
                     {cat.name}
                   </h3>
                   <p className="mt-2.5 text-sm text-neutral-400 font-light leading-relaxed relative z-10">
@@ -137,7 +171,7 @@ export const Categories: React.FC<CategoriesProps> = ({ onSelectCategory, catego
 
                 {/* Bottom Action Arrow */}
                 <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-bold text-neutral-400 group-hover:text-brand-400 transition-colors relative z-10">
-                  <span>Explorar productos</span>
+                  <span>Ver en Galería</span>
                   <div className="p-1.5 rounded-full bg-white/5 group-hover:bg-brand-500 group-hover:text-white transition-all duration-300 shadow-md">
                     <ArrowUpRight className="w-4 h-4" />
                   </div>
