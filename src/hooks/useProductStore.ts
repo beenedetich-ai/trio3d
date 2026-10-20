@@ -146,10 +146,11 @@ export function useProductStore() {
               const hadLegacyInDb = data.some((item: any) =>
                 item?.category && LEGACY_CAT_TO_MELI[String(item.category).toLowerCase().trim()]
               );
-              if (hadLegacyInDb && supabase) {
+              const sb = supabase;
+              if (hadLegacyInDb && sb) {
                 mapped.forEach(async (p) => {
                   try {
-                    await supabase.from('products').update({
+                    await sb.from('products').update({
                       category: p.category,
                       subcategory: p.subcategory,
                     }).eq('id', p.id);
