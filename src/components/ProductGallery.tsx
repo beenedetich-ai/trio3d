@@ -82,8 +82,8 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
   };
 
   return (
-    <section id="galeria" className="py-28 bg-dark-bg relative overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="galeria" className="py-16 sm:py-28 bg-dark-bg relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -194,11 +194,11 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
         {/* Products Grid */}
         <AnimatePresence mode="wait">
           {!isLoaded ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="apple-card rounded-3xl overflow-hidden h-80 animate-pulse bg-white/[0.03] border border-white/10"
+                  className="apple-card rounded-2xl sm:rounded-3xl overflow-hidden h-64 sm:h-80 animate-pulse bg-white/[0.03] border border-white/10"
                 />
               ))}
             </div>
@@ -207,11 +207,11 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="apple-card p-12 rounded-3xl text-center max-w-md mx-auto my-12"
+              className="apple-card p-8 sm:p-12 rounded-3xl text-center max-w-md mx-auto my-12"
             >
-              <Sparkles className="w-12 h-12 text-brand-500 mx-auto mb-4 animate-bounce" />
-              <h3 className="text-xl font-bold text-white">No encontramos ese producto</h3>
-              <p className="text-neutral-400 text-sm mt-2 font-light">
+              <Sparkles className="w-10 h-10 sm:w-12 sm:h-12 text-brand-500 mx-auto mb-4 animate-bounce" />
+              <h3 className="text-lg sm:text-xl font-bold text-white">No encontramos ese producto</h3>
+              <p className="text-neutral-400 text-xs sm:text-sm mt-2 font-light">
                 ¡Pero podemos imprimirlo a medida! Mandanos tu idea o archivo STL/CAD por WhatsApp.
               </p>
               <button
@@ -219,7 +219,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                   const message = encodeURIComponent('¡Hola Trío 3D! No encontré un modelo específico en la web. ¿Pueden hacerlo a medida?');
                   window.open(`https://wa.me/5493434381991?text=${message}`, '_blank');
                 }}
-                className="mt-6 inline-flex items-center gap-2 bg-gradient-to-r from-brand-500 to-orange-600 text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-brand-500/30"
+                className="mt-6 inline-flex items-center gap-2 bg-gradient-to-r from-brand-500 to-orange-600 text-white text-xs sm:text-sm font-bold px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-500/30"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>Consultar A Medida</span>
@@ -228,7 +228,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           ) : (
             <motion.div
               layout
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+              className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-6"
             >
               {filteredProducts.map((product) => (
                 <motion.div
@@ -240,74 +240,75 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                   key={product.id}
                   onClick={() => setActiveProduct(product)}
-                  className="group cursor-pointer apple-card rounded-3xl overflow-hidden flex flex-col justify-between"
+                  className="group cursor-pointer apple-card rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col justify-between transition-all"
                 >
                   {/* Image Container */}
-                  <div className="relative h-60 w-full bg-neutral-950 overflow-hidden">
+                  <div className="relative aspect-square sm:aspect-auto sm:h-60 w-full bg-neutral-950 overflow-hidden">
                     <Image
                       src={product.image}
                       alt={product.name}
                       fill
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-700 ease-apple"
                     />
 
                     {/* Category Pill */}
-                    <div className="absolute top-3 left-3 z-10">
-                      <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-black/70 backdrop-blur-xl text-white border border-white/15">
+                    <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 max-w-[70%] truncate">
+                      <span className="text-[8px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/75 backdrop-blur-xl text-white border border-white/15 block truncate">
                         {product.category}
                       </span>
                     </div>
 
                     {/* Popular Badge */}
                     {product.isPopular && (
-                      <div className="absolute top-3 right-3 z-10 flex items-center gap-1 text-[10px] font-extrabold px-3 py-1 rounded-full bg-brand-500 text-white shadow-lg border border-white/20">
-                        <Star className="w-3 h-3 fill-white" />
-                        MÁS VENDIDO
+                      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 flex items-center gap-0.5 sm:gap-1 text-[8px] sm:text-[10px] font-extrabold px-1.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-brand-500 text-white shadow-lg border border-white/20">
+                        <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-white" />
+                        <span className="hidden xs:inline">MÁS VENDIDO</span>
+                        <span className="xs:hidden">TOP</span>
                       </div>
                     )}
 
                     {/* Multi-photo Badge */}
                     {product.images && product.images.length > 1 && (
-                      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-black/75 text-white border border-white/20 backdrop-blur-md shadow">
-                        <ImageIcon className="w-3 h-3 text-brand-400" />
-                        <span>{product.images.length} fotos</span>
+                      <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-10 flex items-center gap-1 text-[8px] sm:text-[10px] font-extrabold px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-black/75 text-white border border-white/20 backdrop-blur-md shadow">
+                        <ImageIcon className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-brand-400" />
+                        <span>{product.images.length}</span>
                       </div>
                     )}
 
                     {/* Overlay Quick View Hint */}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-sm">
-                      <span className="bg-white/20 backdrop-blur-xl text-white text-xs font-bold px-4 py-2.5 rounded-full border border-white/30 flex items-center gap-2 shadow-2xl">
-                        <Eye className="w-4 h-4" />
+                      <span className="bg-white/20 backdrop-blur-xl text-white text-[11px] sm:text-xs font-bold px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full border border-white/30 flex items-center gap-1.5 sm:gap-2 shadow-2xl">
+                        <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         Ver Detalles
                       </span>
                     </div>
                   </div>
 
                   {/* Details */}
-                  <div className="p-6 flex-1 flex flex-col justify-between">
+                  <div className="p-3 sm:p-6 flex-1 flex flex-col justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-white group-hover:text-brand-400 transition-colors line-clamp-1">
+                      <h3 className="text-xs sm:text-lg font-bold text-white group-hover:text-brand-400 transition-colors line-clamp-1 leading-snug">
                         {product.name}
                       </h3>
-                      <p className="mt-2 text-xs text-neutral-400 font-light line-clamp-2 leading-relaxed">
+                      <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-neutral-400 font-light line-clamp-2 leading-tight sm:leading-relaxed">
                         {product.description}
                       </p>
                     </div>
 
                     {/* Price & Action */}
-                    <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                    <div className="mt-3 sm:mt-6 pt-2 sm:pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
-                        <span className="text-base font-extrabold text-amber-400 block">
+                        <span className="text-sm sm:text-base font-extrabold text-amber-400 block tracking-tight">
                           {formatPrice(product.price)}
                         </span>
-                        <span className="text-[10px] text-amber-300/90 font-medium flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3 text-amber-400" />
-                          <span>24 a 72 hs de prod.</span>
+                        <span className="text-[9px] sm:text-[10px] text-amber-300/90 font-medium flex items-center gap-1 mt-0.5">
+                          <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-400 flex-shrink-0" />
+                          <span className="truncate">24 a 72 hs</span>
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                         {onAddToCart && (
                           <motion.button
                             whileHover={{ scale: 1.08 }}
@@ -316,10 +317,10 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                               e.stopPropagation();
                               onAddToCart(product);
                             }}
-                            className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:opacity-90 transition-all duration-300 shadow-md shadow-pink-500/20"
+                            className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:opacity-90 transition-all duration-300 shadow-md shadow-pink-500/20"
                             title="Agregar al Carrito"
                           >
-                            <ShoppingBag className="w-4 h-4" />
+                            <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </motion.button>
                         )}
 
@@ -327,10 +328,10 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
                           whileHover={{ scale: 1.08 }}
                           whileTap={{ scale: 0.92 }}
                           onClick={(e) => handleQuickWhatsApp(e, product)}
-                          className="p-2.5 rounded-2xl bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10 transition-all duration-300 border border-white/10"
+                          className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10 transition-all duration-300 border border-white/10"
                           title="Consultar por WhatsApp"
                         >
-                          <MessageCircle className="w-4 h-4" />
+                          <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </motion.button>
                       </div>
                     </div>
