@@ -270,7 +270,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
   };
 
   return (
-    <section id="galeria" className="py-16 sm:py-28 bg-dark-bg relative overflow-hidden">
+    <section id="galeria" className="pt-2 pb-16 sm:pt-4 sm:pb-24 bg-dark-bg relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -278,7 +278,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col md:flex-row md:items-end justify-between mb-8 sm:mb-12 gap-6"
+          className="flex flex-col md:flex-row md:items-end justify-between mb-5 sm:mb-8 gap-4"
         >
           <div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-bold uppercase tracking-widest mb-3">
@@ -335,7 +335,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({
 
         {/* Subcategory Filter Bar */}
         {availableSubcategories.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-8 sm:mb-12 scrollbar-none px-3 py-2 sm:py-2.5 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-md">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2.5 mb-5 sm:mb-8 scrollbar-none px-3 py-2 sm:py-2.5 rounded-2xl bg-white/[0.02] border border-white/10 backdrop-blur-md">
             <span className="text-[10px] sm:text-[11px] font-bold text-pink-400 uppercase tracking-wider px-2 flex items-center gap-1.5 whitespace-nowrap">
               <Sparkles className="w-3.5 h-3.5" />
               Subcategorías:
